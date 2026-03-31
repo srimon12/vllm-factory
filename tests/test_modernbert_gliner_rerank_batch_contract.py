@@ -11,6 +11,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _L4_SCRIPT_DIR = _REPO_ROOT / "scripts" / "gliner" / "l4"
 if str(_L4_SCRIPT_DIR) not in sys.path:
@@ -21,6 +23,18 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 from l4_parity_fixtures import MULTI_TEXTS, TEST_LABELS  # noqa: E402
 
 
+def _can_import(name: str) -> bool:
+    try:
+        __import__(name)
+        return True
+    except ImportError:
+        return False
+
+
+_skip_no_gliner = pytest.mark.skipif(not _can_import("gliner"), reason="gliner not installed")
+
+
+@_skip_no_gliner
 def test_multi_text_tokenize_variable_length_and_masks_aligned():
     from plugins.modernbert_gliner_rerank.processor import GLiNERRerankProcessor
 
@@ -42,6 +56,7 @@ def test_multi_text_tokenize_variable_length_and_masks_aligned():
         assert x["text_lengths"] == len(x["words"])
 
 
+@_skip_no_gliner
 def test_batch_tokenize_matches_collator_rows_like_preprocess_parity():
     """Same invariant as preprocess_parity_test multi path: batched collator row i == _tokenize(texts[i]) on prefix."""
     from gliner import GLiNER
