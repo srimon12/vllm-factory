@@ -41,7 +41,7 @@ def register_plugin(
     """
     register_config(model_type, config_cls)
     register_with_vllm(architecture_name, model_cls)
-    for alias in (aliases or []):
+    for alias in aliases or []:
         register_with_vllm(alias, model_cls)
 
 
@@ -57,6 +57,7 @@ def register_with_vllm(architecture_name: str, model_cls: Any) -> bool:
     """
     try:
         from vllm import ModelRegistry
+
         ModelRegistry.register_model(architecture_name, model_cls)
         logger.debug("Registered '%s' with vLLM", architecture_name)
         return True
@@ -79,6 +80,7 @@ def register_config(model_type: str, config_cls: Any) -> bool:
     """
     try:
         from transformers import AutoConfig
+
         try:
             AutoConfig.register(model_type, config_cls, exist_ok=True)
         except TypeError:

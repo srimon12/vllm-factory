@@ -32,13 +32,13 @@ logger = logging.getLogger(__name__)
 # This encoder uses HF RoPE + SDPA + block-diagonal masks for numerical
 # parity with the vanilla GLiNER library.
 # ---------------------------------------------------------------------------
-_ENCODER_PATH = Path(__file__).resolve().parents[2] / "models" / "modernbert" / "modernbert_encoder.py"
+_ENCODER_PATH = (
+    Path(__file__).resolve().parents[2] / "models" / "modernbert" / "modernbert_encoder.py"
+)
 
 
 def _import_modernbert_encoder():
-    spec = importlib.util.spec_from_file_location(
-        "modernbert_encoder", str(_ENCODER_PATH)
-    )
+    spec = importlib.util.spec_from_file_location("modernbert_encoder", str(_ENCODER_PATH))
     mod = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("modernbert_encoder", mod)
     spec.loader.exec_module(mod)
@@ -75,9 +75,7 @@ def _patch_modernbert_config(cfg):
         rp = object.__getattribute__(cfg, "rope_parameters")
     except AttributeError:
         rp = None
-    if isinstance(rp, dict) and any(
-        k in rp for k in ("full_attention", "sliding_attention")
-    ):
+    if isinstance(rp, dict) and any(k in rp for k in ("full_attention", "sliding_attention")):
         try:
             delattr(cfg, "rope_parameters")
         except AttributeError:
@@ -151,13 +149,17 @@ class GLiNERRerankModel(nn.Module):
                 raise ValueError("GLiNERRerankModel requires input_ids")
             output = self.backbone(
                 input_ids=input_ids,
-                position_ids=positions.unsqueeze(0) if positions is not None and positions.dim() == 1 else positions,
+                position_ids=positions.unsqueeze(0)
+                if positions is not None and positions.dim() == 1
+                else positions,
                 inputs_embeds=inputs_embeds,
             )
             hidden_states = (
                 output.last_hidden_state
                 if hasattr(output, "last_hidden_state")
-                else output if isinstance(output, torch.Tensor) else output[0]
+                else output
+                if isinstance(output, torch.Tensor)
+                else output[0]
             )
             if hidden_states.dim() == 3:
                 hidden_states = hidden_states.squeeze(0)
@@ -188,7 +190,7 @@ class GLiNERRerankModel(nn.Module):
 
         for hf_name, tensor in weights:
             if hf_name.startswith(backbone_prefix):
-                hf_key = hf_name[len(backbone_prefix):]
+                hf_key = hf_name[len(backbone_prefix) :]
 
                 if hf_key not in vllm_backbone:
                     continue
@@ -197,23 +199,27 @@ class GLiNERRerankModel(nn.Module):
                     target_shape = vllm_backbone[hf_key].shape
                     if tensor.shape[0] < target_shape[0]:
                         pad = torch.zeros(
-                            target_shape[0] - tensor.shape[0], tensor.shape[1],
-                            dtype=tensor.dtype, device=tensor.device,
+                            target_shape[0] - tensor.shape[0],
+                            tensor.shape[1],
+                            dtype=tensor.dtype,
+                            device=tensor.device,
                         )
                         tensor = torch.cat([tensor, pad], dim=0)
                     elif tensor.shape[0] > target_shape[0]:
-                        tensor = tensor[:target_shape[0], :]
+                        tensor = tensor[: target_shape[0], :]
 
                 backbone_state[hf_key] = tensor
             elif hf_name.startswith(proj_prefix):
-                proj_state[hf_name[len(proj_prefix):]] = tensor
+                proj_state[hf_name[len(proj_prefix) :]] = tensor
             elif hf_name.startswith("rnn.lstm."):
-                rnn_state[hf_name[len("rnn.lstm."):]] = tensor
+                rnn_state[hf_name[len("rnn.lstm.") :]] = tensor
             elif hf_name.startswith("scorer."):
-                scorer_state[hf_name[len("scorer."):]] = tensor
+                scorer_state[hf_name[len("scorer.") :]] = tensor
 
         self.backbone.load_state_dict(backbone_state, strict=False)
-        logger.info("ModernBERT backbone: loaded %d/%d keys", len(backbone_state), len(vllm_backbone))
+        logger.info(
+            "ModernBERT backbone: loaded %d/%d keys", len(backbone_state), len(vllm_backbone)
+        )
 
         if proj_state:
             self.token_projection.load_state_dict(
@@ -229,9 +235,9 @@ class GLiNERRerankModel(nn.Module):
         if scorer_state:
             for key, tensor in scorer_state.items():
                 if key.startswith("proj_token."):
-                    getattr(self.scorer_proj_token, key[len("proj_token."):]).data.copy_(tensor)
+                    getattr(self.scorer_proj_token, key[len("proj_token.") :]).data.copy_(tensor)
                 elif key.startswith("proj_label."):
-                    getattr(self.scorer_proj_label, key[len("proj_label."):]).data.copy_(tensor)
+                    getattr(self.scorer_proj_label, key[len("proj_label.") :]).data.copy_(tensor)
                 elif key.startswith("out_mlp."):
                     parts = key.split(".")
                     idx = int(parts[1])

@@ -23,16 +23,18 @@ import torch.nn as nn
 # This avoids sys.path manipulation and works in all contexts:
 # editable .pth install, vLLM worker subprocess, direct script execution.
 # Mirrors the superpod colbert_plugin self-contained encoder approach.
-_ENCODER_PATH = Path(__file__).resolve().parents[2] / "models" / "modernbert" / "modernbert_encoder.py"
+_ENCODER_PATH = (
+    Path(__file__).resolve().parents[2] / "models" / "modernbert" / "modernbert_encoder.py"
+)
+
 
 def _import_modernbert_encoder():
-    spec = importlib.util.spec_from_file_location(
-        "modernbert_encoder", str(_ENCODER_PATH)
-    )
+    spec = importlib.util.spec_from_file_location("modernbert_encoder", str(_ENCODER_PATH))
     mod = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("modernbert_encoder", mod)
     spec.loader.exec_module(mod)
     return mod
+
 
 _modernbert_encoder_mod = _import_modernbert_encoder()
 ModernBertModel = _modernbert_encoder_mod.ModernBertModel
@@ -106,6 +108,7 @@ class ModernBertForColBERT(nn.Module):
     def sample(self, logits: torch.Tensor, sampling_metadata):
         try:
             from vllm.sequence import SamplerOutput
+
             return SamplerOutput(outputs=[])
         except ImportError:
             return None
@@ -141,7 +144,9 @@ class ModernBertForColBERT(nn.Module):
         hidden_states = (
             output.last_hidden_state
             if hasattr(output, "last_hidden_state")
-            else output if isinstance(output, torch.Tensor) else output[0]
+            else output
+            if isinstance(output, torch.Tensor)
+            else output[0]
         )
 
         # Flatten to (total_tokens, hidden_size) for token-level pooling
@@ -228,6 +233,7 @@ class ModernBertForColBERT(nn.Module):
             # Try HF Hub (works with local cache even when HF_HUB_OFFLINE=1)
             try:
                 from huggingface_hub import hf_hub_download
+
                 dense_file = Path(
                     hf_hub_download(
                         repo_id=str(self.model_path),
@@ -248,8 +254,9 @@ class ModernBertForColBERT(nn.Module):
         with safe_open(str(dense_file), framework="pt", device="cpu") as f:
             for key in f.keys():
                 tensor = f.get_tensor(key)
-                if ("weight" in key.lower() or tensor.dim() == 2) and \
-                        self.colbert_linear.weight.shape == tensor.shape:
+                if (
+                    "weight" in key.lower() or tensor.dim() == 2
+                ) and self.colbert_linear.weight.shape == tensor.shape:
                     self.colbert_linear.weight.data.copy_(tensor)
                     print(f"[ModernColBERT] ✓ colbert_linear.weight loaded: {tensor.shape}")
                     loaded_ok = True

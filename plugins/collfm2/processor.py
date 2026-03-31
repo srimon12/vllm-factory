@@ -82,10 +82,10 @@ class ColLFM2Processor(BaseProcessor):
         Without skip_mm_profiling the tensor-parallel profiler OOMs on first load.
         """
         return {
-            "skip_mm_profiling": True,       # avoids OOM during VLM memory profiling
-            "mm_processor_cache_gb": 1,       # keep multimodal cache small (default: 4GB)
+            "skip_mm_profiling": True,  # avoids OOM during VLM memory profiling
+            "mm_processor_cache_gb": 1,  # keep multimodal cache small (default: 4GB)
             "limit_mm_per_prompt": {"image": 1},  # ColPali: one image per request
-            "enable_prefix_caching": False,   # not compatible with pooling runner
+            "enable_prefix_caching": False,  # not compatible with pooling runner
             "enable_chunked_prefill": False,  # not compatible with encoder models
         }
 
@@ -99,6 +99,7 @@ class ColLFM2Processor(BaseProcessor):
             async with self._tokenizer_lock:
                 if self._hf_tokenizer is None:
                     from transformers import AutoProcessor
+
                     proc = await asyncio.to_thread(
                         AutoProcessor.from_pretrained,
                         self.model_path,
@@ -136,6 +137,7 @@ class ColLFM2Processor(BaseProcessor):
         """Detect whether input is an image (PIL or path)."""
         try:
             from PIL import Image as PILImage
+
             if isinstance(input_data, PILImage.Image):
                 return True
         except ImportError:
@@ -154,6 +156,7 @@ class ColLFM2Processor(BaseProcessor):
         if self._hf_tokenizer is None:
             # Fallback: load synchronously if called outside async context
             from transformers import AutoProcessor
+
             proc = AutoProcessor.from_pretrained(self.model_path, trust_remote_code=True)
             tokenizer = proc.tokenizer if hasattr(proc, "tokenizer") else proc
         else:
@@ -214,7 +217,9 @@ class ColLFM2Processor(BaseProcessor):
     # Postprocessing
     # ------------------------------------------------------------------
 
-    def postprocess(self, raw_output: Any, metadata: Optional[Dict] = None) -> Optional[torch.Tensor]:
+    def postprocess(
+        self, raw_output: Any, metadata: Optional[Dict] = None
+    ) -> Optional[torch.Tensor]:
         """
         For images: strip leading BOS token added by vLLM.
         vLLM prepends <|startoftext|> to image sequences; the HF reference doesn't.

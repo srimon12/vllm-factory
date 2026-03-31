@@ -169,7 +169,9 @@ def _build_gliner_tokenizer(hf_model_id: str, merged: dict, ent_token: str, sep_
     """Load the base tokenizer and add GLiNER special tokens (<<ENT>>, <<SEP>>)."""
     from transformers import AutoTokenizer
 
-    tokenizer_source = merged.get("model_name") if isinstance(merged.get("model_name"), str) else None
+    tokenizer_source = (
+        merged.get("model_name") if isinstance(merged.get("model_name"), str) else None
+    )
 
     for source in [hf_model_id, tokenizer_source]:
         if source is None:
@@ -229,7 +231,9 @@ def prepare_gliner_model(
         if cached.get("model_type") == reg["model_type"]:
             print(f"✅ Model already prepared at {output_dir}")
             return output_dir
-        print(f"⚠️  Cached model_type '{cached.get('model_type')}' != '{reg['model_type']}', regenerating...")
+        print(
+            f"⚠️  Cached model_type '{cached.get('model_type')}' != '{reg['model_type']}', regenerating..."
+        )
         shutil.rmtree(output_dir, ignore_errors=True)
 
     print(f"📦 Preparing {hf_model_id} for vLLM ({plugin})...")
@@ -292,19 +296,20 @@ def prepare_gliner_model(
         "num_hidden_layers": 0,  # vLLM pooling trick
         "num_attention_heads": 1,
         # Real encoder config
-        "encoder_num_layers": encoder_config.get("num_hidden_layers",
-                              encoder_config.get("num_layers", 24)),
-        "encoder_num_attention_heads": encoder_config.get("num_attention_heads",
-                                      encoder_config.get("num_heads", 12)),
-        "hidden_size": encoder_config.get(
-            reg.get("hidden_size_key", "hidden_size"), 768),
+        "encoder_num_layers": encoder_config.get(
+            "num_hidden_layers", encoder_config.get("num_layers", 24)
+        ),
+        "encoder_num_attention_heads": encoder_config.get(
+            "num_attention_heads", encoder_config.get("num_heads", 12)
+        ),
+        "hidden_size": encoder_config.get(reg.get("hidden_size_key", "hidden_size"), 768),
         "intermediate_size": encoder_config.get("intermediate_size", 3072),
         "vocab_size": len(tokenizer),
         "max_position_embeddings": encoder_config.get("max_position_embeddings", 8192),
-        "norm_eps": encoder_config.get("norm_eps",
-                    encoder_config.get("layer_norm_eps", 1e-5)),
-        "pad_token_id": encoder_config.get("pad_token_id",
-                        tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0),
+        "norm_eps": encoder_config.get("norm_eps", encoder_config.get("layer_norm_eps", 1e-5)),
+        "pad_token_id": encoder_config.get(
+            "pad_token_id", tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+        ),
         # GLiNER params
         "gliner_dropout": merged.get("dropout", 0.3),
         "max_width": merged.get("max_width", 12),
@@ -332,8 +337,12 @@ def prepare_gliner_model(
             "d_ff": encoder_config.get("d_ff", 2816),
             "num_layers": encoder_config.get("num_layers", 24),
             "num_heads": encoder_config.get("num_heads", 16),
-            "relative_attention_num_buckets": encoder_config.get("relative_attention_num_buckets", 32),
-            "relative_attention_max_distance": encoder_config.get("relative_attention_max_distance", 128),
+            "relative_attention_num_buckets": encoder_config.get(
+                "relative_attention_num_buckets", 32
+            ),
+            "relative_attention_max_distance": encoder_config.get(
+                "relative_attention_max_distance", 128
+            ),
             "dropout_rate": encoder_config.get("dropout_rate", 0.1),
             "layer_norm_epsilon": encoder_config.get("layer_norm_epsilon", 1e-6),
             "feed_forward_proj": encoder_config.get("feed_forward_proj", "gated-gelu"),
@@ -357,5 +366,7 @@ def prepare_gliner_model(
 
     print(f"✅ Model prepared at {output_dir}")
     print(f"   Config: {reg['model_type']}, {reg['architectures'][0]}")
-    print(f"   hidden={vllm_config['hidden_size']}, encoder_layers={vllm_config['encoder_num_layers']}")
+    print(
+        f"   hidden={vllm_config['hidden_size']}, encoder_layers={vllm_config['encoder_num_layers']}"
+    )
     return output_dir

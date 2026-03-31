@@ -60,12 +60,13 @@ class GLiNERRerankProcessor:
     def _ensure_llm(self):
         if self._llm is not None:
             return
+        from vllm import LLM
+
         import plugins.modernbert_gliner_rerank  # noqa: F401
-        from plugins.modernbert_gliner_rerank import get_model_path
         from plugins.deberta_gliner_linker.vllm_pooling_attention_mask import (
             apply_pooling_attention_mask_patch,
         )
-        from vllm import LLM
+        from plugins.modernbert_gliner_rerank import get_model_path
 
         apply_pooling_attention_mask_patch()
 
@@ -115,7 +116,9 @@ class GLiNERRerankProcessor:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        logger.info("warmup complete: %d labels, vLLM active (uni-encoder / L4 rerank path)", len(unique))
+        logger.info(
+            "warmup complete: %d labels, vLLM active (uni-encoder / L4 rerank path)", len(unique)
+        )
 
     def _tokenize(self, text: str) -> dict:
         if self._data_processor is None or self._collator is None:
@@ -221,13 +224,15 @@ class GLiNERRerankProcessor:
             else:
                 entity_text = " ".join(tok["words"][ws : we + 1])
 
-            entities.append({
-                "start": char_start,
-                "end": char_end,
-                "text": entity_text,
-                "label": span.entity_type,
-                "score": round(span.score, 4),
-            })
+            entities.append(
+                {
+                    "start": char_start,
+                    "end": char_end,
+                    "text": entity_text,
+                    "label": span.entity_type,
+                    "score": round(span.score, 4),
+                }
+            )
 
         return entities
 

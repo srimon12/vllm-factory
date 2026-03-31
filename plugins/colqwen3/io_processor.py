@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
 from vllm.inputs import TokensPrompt
@@ -37,6 +36,7 @@ from vllm.pooling_params import PoolingParams
 @dataclass
 class ColQwen3Input:
     """Validated embedding request after parse_request."""
+
     prompt: str | dict
     is_query: bool = True
 
@@ -77,8 +77,10 @@ class ColQwen3IOProcessor(IOProcessor[ColQwen3Input, list[float]]):
             with self._tokenizer_lock:
                 if self._hf_tokenizer is None:
                     from transformers import AutoTokenizer
+
                     self._hf_tokenizer = AutoTokenizer.from_pretrained(
-                        self._model_id, trust_remote_code=True,
+                        self._model_id,
+                        trust_remote_code=True,
                     )
 
     def parse_request(self, request: Any) -> ColQwen3Input:
@@ -115,11 +117,13 @@ class ColQwen3IOProcessor(IOProcessor[ColQwen3Input, list[float]]):
             if source.startswith("data:"):
                 import base64
                 from io import BytesIO
+
                 _, b64data = source.split(",", 1)
                 return PILImage.open(BytesIO(base64.b64decode(b64data))).convert("RGB")
             if source.startswith(("http://", "https://")):
                 import urllib.request
                 from io import BytesIO
+
                 with urllib.request.urlopen(source) as resp:
                     return PILImage.open(BytesIO(resp.read())).convert("RGB")
             return PILImage.open(source).convert("RGB")
@@ -148,7 +152,8 @@ class ColQwen3IOProcessor(IOProcessor[ColQwen3Input, list[float]]):
         }
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         with self._lock:
             extra = self._pending_extra_kwargs
@@ -184,7 +189,8 @@ class ColQwen3IOProcessor(IOProcessor[ColQwen3Input, list[float]]):
             return torch.as_tensor(raw).tolist()
 
     def output_to_response(
-        self, plugin_output: list[float],
+        self,
+        plugin_output: list[float],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

@@ -243,9 +243,7 @@ class ModelServer:
             self._start_log_reader()
 
         except FileNotFoundError:
-            raise RuntimeError(
-                f"[{self.name}] vllm command not found. Ensure vLLM is installed."
-            )
+            raise RuntimeError(f"[{self.name}] vllm command not found. Ensure vLLM is installed.")
         except Exception as e:
             self.stop()
             raise RuntimeError(f"[{self.name}] Failed to start: {e}")
@@ -293,10 +291,7 @@ class ModelServer:
             # Progress logging
             elapsed = time.time() - start_time
             if elapsed - last_log_elapsed >= 30:
-                logger.info(
-                    f"[{self.name}] Still starting... "
-                    f"({elapsed:.0f}s, last: {last_error})"
-                )
+                logger.info(f"[{self.name}] Still starting... ({elapsed:.0f}s, last: {last_error})")
                 last_log_elapsed = elapsed
 
             time.sleep(self.health_check_interval)
@@ -334,9 +329,11 @@ class ModelServer:
                 result = subprocess.run(
                     [
                         "curl",
-                        "--unix-socket", self.socket_path,
+                        "--unix-socket",
+                        self.socket_path,
                         "http://localhost/health",
-                        "--max-time", "3",
+                        "--max-time",
+                        "3",
                         "-sf",
                     ],
                     capture_output=True,
@@ -348,9 +345,7 @@ class ModelServer:
                 return False
         else:
             try:
-                req = urllib.request.Request(
-                    f"http://127.0.0.1:{self.port}/health", method="GET"
-                )
+                req = urllib.request.Request(f"http://127.0.0.1:{self.port}/health", method="GET")
                 with urllib.request.urlopen(req, timeout=3) as resp:
                     return resp.status == 200
             except Exception:
@@ -379,9 +374,7 @@ class ModelServer:
             return
 
         if self.process.poll() is not None:
-            logger.debug(
-                f"[{self.name}] Already stopped (code {self.process.returncode})"
-            )
+            logger.debug(f"[{self.name}] Already stopped (code {self.process.returncode})")
             self.process = None
             return
 

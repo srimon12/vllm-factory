@@ -28,7 +28,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
 from vllm.inputs import TokensPrompt
@@ -57,6 +56,7 @@ def _cap_labels_tokenizer_max_length(gliner, max_length: int) -> None:
 @dataclass
 class GLiNERLinkerInput:
     """Validated NER request after parse_request."""
+
     text: str
     labels: list[str]
     threshold: float = 0.5
@@ -83,6 +83,7 @@ class GLiNERLinkerIOProcessor(IOProcessor[GLiNERLinkerInput, list[dict[str, Any]
         from plugins.deberta_gliner_linker.vllm_pooling_attention_mask import (
             apply_pooling_attention_mask_patch,
         )
+
         apply_pooling_attention_mask_patch()
 
         from gliner import GLiNER
@@ -157,9 +158,7 @@ class GLiNERLinkerIOProcessor(IOProcessor[GLiNERLinkerInput, list[dict[str, Any]
             data = request
 
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Expected dict with 'text' and 'labels' keys, got {type(data)}"
-            )
+            raise ValueError(f"Expected dict with 'text' and 'labels' keys, got {type(data)}")
 
         labels = data.get("labels", [])
         if not labels:
@@ -240,7 +239,8 @@ class GLiNERLinkerIOProcessor(IOProcessor[GLiNERLinkerInput, list[dict[str, Any]
         return TokensPrompt(prompt_token_ids=ids_list)
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         with self._lock:
             extra = self._pending_extra_kwargs
@@ -300,18 +300,21 @@ class GLiNERLinkerIOProcessor(IOProcessor[GLiNERLinkerInput, list[dict[str, Any]
             we = span.end
             char_start = meta["word_starts"][ws] if ws < len(meta["word_starts"]) else 0
             char_end = meta["word_ends"][we] if we < len(meta["word_ends"]) else len(src)
-            entities.append({
-                "start": char_start,
-                "end": char_end,
-                "text": src[char_start:char_end],
-                "label": span.entity_type,
-                "score": round(span.score, 4),
-            })
+            entities.append(
+                {
+                    "start": char_start,
+                    "end": char_end,
+                    "text": src[char_start:char_end],
+                    "label": span.entity_type,
+                    "score": round(span.score, 4),
+                }
+            )
 
         return entities
 
     def output_to_response(
-        self, plugin_output: list[dict[str, Any]],
+        self,
+        plugin_output: list[dict[str, Any]],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

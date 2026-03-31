@@ -28,8 +28,8 @@ from typing import List
 import aiohttp
 
 # Query/Document prefix token IDs (ModernBERT [Q]/[D] special tokens)
-QUERY_PREFIX_TOKEN_ID = 50368   # [Q] with trailing space
-DOC_PREFIX_TOKEN_ID = 50369     # [D] with trailing space
+QUERY_PREFIX_TOKEN_ID = 50368  # [Q] with trailing space
+DOC_PREFIX_TOKEN_ID = 50369  # [D] with trailing space
 
 # Hardcoded fallback token IDs for benchmark (no tokenizer needed)
 # Standard ModernBERT token IDs: BOS=50281, EOS=50282
@@ -127,8 +127,9 @@ def main():
     parser.add_argument("--num-requests", type=int, default=500)
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--warmup", type=int, default=200)
-    parser.add_argument("--seq-len", type=int, default=128,
-                        help="Document length in tokens (default: 128)")
+    parser.add_argument(
+        "--seq-len", type=int, default=128, help="Document length in tokens (default: 128)"
+    )
     args = parser.parse_args()
 
     print()

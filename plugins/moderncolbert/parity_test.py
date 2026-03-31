@@ -25,11 +25,11 @@ from pathlib import Path
 import torch
 
 # Token IDs injected at position 1 (matching PyLate / superpod ColBERTPreprocessor)
-QUERY_PREFIX_TOKEN_ID = 50368   # [Q] with trailing space
-DOC_PREFIX_TOKEN_ID   = 50369   # [D] with trailing space
+QUERY_PREFIX_TOKEN_ID = 50368  # [Q] with trailing space
+DOC_PREFIX_TOKEN_ID = 50369  # [D] with trailing space
 
 
-MASK_TOKEN_ID = 50284       # [MASK]
+MASK_TOKEN_ID = 50284  # [MASK]
 
 
 def _preprocess_query(tokenizer, text: str, query_max_length: int = 32) -> list:
@@ -37,8 +37,14 @@ def _preprocess_query(tokenizer, text: str, query_max_length: int = 32) -> list:
 
     Exactly mirrors PyLate ColBERT query tokenization.
     """
-    tokens = tokenizer(text, add_special_tokens=True, truncation=True,
-                       max_length=query_max_length - 1, padding=False, return_tensors=None)
+    tokens = tokenizer(
+        text,
+        add_special_tokens=True,
+        truncation=True,
+        max_length=query_max_length - 1,
+        padding=False,
+        return_tensors=None,
+    )
     ids = [tokens["input_ids"][0], QUERY_PREFIX_TOKEN_ID] + tokens["input_ids"][1:]
     # Pad to query_max_length with MASK tokens (exactly like PyLate)
     if len(ids) < query_max_length:
@@ -52,13 +58,24 @@ def _preprocess_document(tokenizer, text: str, doc_max_length: int = 300) -> lis
     Uses max_length=doc_max_length-1 (tokenizer accounts for [D] addition).
     Exactly mirrors PyLate ColBERT document tokenization (document_length=300).
     """
-    tokens = tokenizer(text, add_special_tokens=True, truncation=True,
-                       max_length=doc_max_length - 1, padding=False, return_tensors=None)
+    tokens = tokenizer(
+        text,
+        add_special_tokens=True,
+        truncation=True,
+        max_length=doc_max_length - 1,
+        padding=False,
+        return_tensors=None,
+    )
     return [tokens["input_ids"][0], DOC_PREFIX_TOKEN_ID] + tokens["input_ids"][1:]
 
 
-def _run_vllm(model_path: str, queries: list, documents: list,
-              query_max_length: int = 32, doc_max_length: int = 300) -> tuple:
+def _run_vllm(
+    model_path: str,
+    queries: list,
+    documents: list,
+    query_max_length: int = 32,
+    doc_max_length: int = 300,
+) -> tuple:
     """Run one LLM instance for both queries and documents.
 
     query_max_length and doc_max_length must match PyLate defaults (32 and 300).
@@ -70,9 +87,7 @@ def _run_vllm(model_path: str, queries: list, documents: list,
 
     os.environ["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_path, use_fast=True, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=True)
 
     # Identify punctuation IDs
     punct_ids = set()
@@ -91,10 +106,12 @@ def _run_vllm(model_path: str, queries: list, documents: list,
         enable_prefix_caching=False,
     )
 
-    q_inputs = [{"prompt_token_ids": _preprocess_query(tokenizer, t, query_max_length)}
-                for t in queries]
-    d_inputs = [{"prompt_token_ids": _preprocess_document(tokenizer, t, doc_max_length)}
-                for t in documents]
+    q_inputs = [
+        {"prompt_token_ids": _preprocess_query(tokenizer, t, query_max_length)} for t in queries
+    ]
+    d_inputs = [
+        {"prompt_token_ids": _preprocess_document(tokenizer, t, doc_max_length)} for t in documents
+    ]
 
     q_outputs = llm.encode(q_inputs, pooling_task="token_embed")
     d_outputs = llm.encode(d_inputs, pooling_task="token_embed")
@@ -152,11 +169,15 @@ def main():
     p.add_argument("--reference-dir", required=True)
     p.add_argument("--report-dir", default="/tmp/moderncolbert_reports")
     p.add_argument("--min-cosine", type=float, default=0.99)
-    p.add_argument("--min-cosine-query", type=float, default=0.90,
-                   help="Query threshold is lower than doc threshold because PyLate's "
-                        "internal query tokenization (MASK padding, [Q] insertion) differs "
-                        "from our manual preprocessing. Document parity (>0.999) proves "
-                        "model correctness; query differences are purely preprocessing.")
+    p.add_argument(
+        "--min-cosine-query",
+        type=float,
+        default=0.90,
+        help="Query threshold is lower than doc threshold because PyLate's "
+        "internal query tokenization (MASK padding, [Q] insertion) differs "
+        "from our manual preprocessing. Document parity (>0.999) proves "
+        "model correctness; query differences are purely preprocessing.",
+    )
     p.add_argument("--query-max-length", type=int, default=256)
     p.add_argument("--doc-max-length", type=int, default=8192)
     args = p.parse_args()
@@ -174,30 +195,41 @@ def main():
 
     print("\n[1/3] Loading reference embeddings...")
     ref_queries = torch.load(ref / "query_embeddings.pt", weights_only=False)
-    ref_docs    = torch.load(ref / "document_embeddings.pt", weights_only=False)
+    ref_docs = torch.load(ref / "document_embeddings.pt", weights_only=False)
     queries_text = json.loads((ref / "queries.json").read_text())
-    docs_text    = json.loads((ref / "documents.json").read_text())
+    docs_text = json.loads((ref / "documents.json").read_text())
     print(f"  queries: {len(ref_queries)}, documents: {len(ref_docs)}")
 
     print("\n[2/3] Running vLLM inference (queries + documents in one engine)...")
     vllm_queries, vllm_docs = _run_vllm(
-        args.model, queries_text, docs_text,
+        args.model,
+        queries_text,
+        docs_text,
         query_max_length=args.query_max_length,
         doc_max_length=args.doc_max_length,
     )
 
     print("\n[3/3] Computing cosine similarity...")
-    q_results = [{"idx": i, "name": f"query_{i}", "cosine": _cosine(r, v)}
-                 for i, (r, v) in enumerate(zip(ref_queries, vllm_queries))]
-    d_results = [{"idx": i, "name": f"doc_{i}",   "cosine": _cosine(r, v)}
-                 for i, (r, v) in enumerate(zip(ref_docs, vllm_docs))]
+    q_results = [
+        {"idx": i, "name": f"query_{i}", "cosine": _cosine(r, v)}
+        for i, (r, v) in enumerate(zip(ref_queries, vllm_queries))
+    ]
+    d_results = [
+        {"idx": i, "name": f"doc_{i}", "cosine": _cosine(r, v)}
+        for i, (r, v) in enumerate(zip(ref_docs, vllm_docs))
+    ]
 
-    q_ok = _print_table("Query parity",    q_results, args.min_cosine_query)
+    q_ok = _print_table("Query parity", q_results, args.min_cosine_query)
     d_ok = _print_table("Document parity", d_results, args.min_cosine)
 
-    report = {"model": args.model, "min_cosine": args.min_cosine,
-              "min_cosine_query": args.min_cosine_query,
-              "queries": q_results, "documents": d_results, "passed": q_ok and d_ok}
+    report = {
+        "model": args.model,
+        "min_cosine": args.min_cosine,
+        "min_cosine_query": args.min_cosine_query,
+        "queries": q_results,
+        "documents": d_results,
+        "passed": q_ok and d_ok,
+    }
     rp = out / "parity_report.json"
     rp.write_text(json.dumps(report, indent=2))
     print(f"\nReport: {rp}")

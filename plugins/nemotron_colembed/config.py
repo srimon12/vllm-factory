@@ -1,4 +1,5 @@
 """NemotronColEmbed Config — extends Qwen3VLConfig with embedding pooling param."""
+
 from transformers.models.qwen3_vl import Qwen3VLConfig
 
 
@@ -14,4 +15,3 @@ class NemotronColEmbedConfig(Qwen3VLConfig):
         self.is_causal = False
         if hasattr(self, "text_config") and self.text_config is not None:
             self.text_config.is_causal = False
-

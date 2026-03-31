@@ -37,12 +37,13 @@ THRESHOLD = 0.5
 MAX_WIDTH = 12
 ENT_TOKEN = "<<ENT>>"
 SEP_TOKEN = "<<SEP>>"
-WORD_PATTERN = re.compile(r'\w+(?:[-_]\w+)*|\S')
+WORD_PATTERN = re.compile(r"\w+(?:[-_]\w+)*|\S")
 
 
 # ======================================================================
 # Phase 1: Generate references + model dir (no vLLM imports)
 # ======================================================================
+
 
 def phase_prepare():
     """Generate GLiNER reference entities and prepare vLLM model directory."""
@@ -62,7 +63,11 @@ def phase_prepare():
 
     # Save references
     with open(REF_FILE, "w") as f:
-        json.dump({"entities": entities, "text": TEXT, "labels": LABELS, "threshold": THRESHOLD}, f, indent=2)
+        json.dump(
+            {"entities": entities, "text": TEXT, "labels": LABELS, "threshold": THRESHOLD},
+            f,
+            indent=2,
+        )
     print(f"\nSaved to {REF_FILE}")
 
     # Prepare vLLM model dir
@@ -78,7 +83,8 @@ def phase_prepare():
     vllm_config = {
         "model_type": "gliner_deberta_v2",
         "architectures": ["GLiNERDebertaV2Model"],
-        "num_hidden_layers": 0, "num_attention_heads": 1,
+        "num_hidden_layers": 0,
+        "num_attention_heads": 1,
         "hidden_size": encoder_config.get("hidden_size", 1024),
         "vocab_size": encoder_config.get("vocab_size", 128004),
         "encoder_hidden_size": encoder_config.get("hidden_size", 1024),
@@ -127,6 +133,7 @@ def phase_prepare():
             deduped[k] = v.clone().contiguous().cpu()
 
     import safetensors.torch
+
     safetensors.torch.save_file(deduped, os.path.join(LOCAL_MODEL_DIR, "model.safetensors"))
     tokenizer.save_pretrained(LOCAL_MODEL_DIR)
     print(f"Model dir: {LOCAL_MODEL_DIR} ({len(deduped)} weights)")
@@ -136,6 +143,7 @@ def phase_prepare():
 # ======================================================================
 # Phase 2: vLLM inference + parity comparison
 # ======================================================================
+
 
 def phase_test():
     """Run vLLM inference and compare with saved GLiNER references."""
@@ -168,7 +176,9 @@ def phase_test():
     prompt_len = len(prompt_list)
     input_words = prompt_list + words
 
-    tokenized = tokenizer(input_words, is_split_into_words=True, return_tensors="pt", truncation=True, padding=False)
+    tokenized = tokenizer(
+        input_words, is_split_into_words=True, return_tensors="pt", truncation=True, padding=False
+    )
     input_ids = tokenized["input_ids"][0]
     attention_mask = tokenized["attention_mask"][0]
 
@@ -178,7 +188,7 @@ def phase_test():
     prev_word_ids = torch.roll(word_ids, 1, dims=0)
     prev_word_ids[0] = -1
     is_new_word = (word_ids != -1) & (word_ids != prev_word_ids)
-    is_in_text = (word_ids >= prompt_len)
+    is_in_text = word_ids >= prompt_len
     valid_indices = is_new_word & is_in_text
     words_mask = torch.zeros_like(word_ids)
     words_mask[valid_indices] = word_ids[valid_indices] - prompt_len + 1
@@ -257,9 +267,17 @@ def _decode_entities(logits, words, id_to_classes, word_positions, text, thresho
     sc = probs[b_idx, s_idx, k_idx, c_idx]
     end_i = s_idx + k_idx
     valid = (end_i + 1) <= len(words)
-    b_idx, s_idx, end_i, c_idx, sc = b_idx[valid], s_idx[valid], end_i[valid], c_idx[valid], sc[valid]
+    b_idx, s_idx, end_i, c_idx, sc = (
+        b_idx[valid],
+        s_idx[valid],
+        end_i[valid],
+        c_idx[valid],
+        sc[valid],
+    )
 
-    spans = sorted(zip(s_idx.tolist(), end_i.tolist(), c_idx.tolist(), sc.tolist()), key=lambda x: -x[3])
+    spans = sorted(
+        zip(s_idx.tolist(), end_i.tolist(), c_idx.tolist(), sc.tolist()), key=lambda x: -x[3]
+    )
     keep = []
     for cand in spans:
         s, e, c, score = cand
@@ -272,13 +290,23 @@ def _decode_entities(logits, words, id_to_classes, word_positions, text, thresho
         if s < len(word_positions) and e < len(word_positions):
             sc_ = word_positions[s][0]
             ec_ = word_positions[e][1]
-            entities.append({"text": text[sc_:ec_], "label": id_to_classes[c + 1], "score": round(score, 4), "start": sc_, "end": ec_})
+            entities.append(
+                {
+                    "text": text[sc_:ec_],
+                    "label": id_to_classes[c + 1],
+                    "score": round(score, 4),
+                    "start": sc_,
+                    "end": ec_,
+                }
+            )
     return entities
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DeBERTa v2 GLiNER Parity Test")
-    parser.add_argument("--prepare", action="store_true", help="Phase 1: generate references + model dir")
+    parser.add_argument(
+        "--prepare", action="store_true", help="Phase 1: generate references + model dir"
+    )
     parser.add_argument("--test", action="store_true", help="Phase 2: vLLM inference + comparison")
     args = parser.parse_args()
 

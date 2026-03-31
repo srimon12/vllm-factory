@@ -59,6 +59,5 @@ def ensure_config_type(config: Any, target_cls: type, **extra_kwargs: Any) -> An
         return target_cls(**config_dict)
     except Exception as e:
         raise ValueError(
-            f"Failed to convert config {type(config).__name__} "
-            f"to {target_cls.__name__}: {e}"
+            f"Failed to convert config {type(config).__name__} to {target_cls.__name__}: {e}"
         ) from e

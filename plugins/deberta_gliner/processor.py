@@ -41,9 +41,12 @@ class GLiNERDebertaV2Processor(BaseProcessor):
     def __init__(self, model_path: str, **kwargs):
         super().__init__(model_path, **kwargs)
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_path, use_fast=True, trust_remote_code=True,
+            model_path,
+            use_fast=True,
+            trust_remote_code=True,
         )
         from transformers import AutoConfig
+
         config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
 
         self._preprocessor = GLiNERPreprocessor(
@@ -97,7 +100,9 @@ class GLiNERDebertaV2Processor(BaseProcessor):
         if raw_output is None or metadata is None:
             return []
 
-        scores = torch.as_tensor(raw_output) if not isinstance(raw_output, torch.Tensor) else raw_output
+        scores = (
+            torch.as_tensor(raw_output) if not isinstance(raw_output, torch.Tensor) else raw_output
+        )
 
         if scores.dim() == 1 and scores.numel() > 3:
             L = int(scores[0].item())

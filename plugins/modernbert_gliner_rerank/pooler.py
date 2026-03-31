@@ -6,7 +6,6 @@ from typing import Any, List, Optional, Set
 
 import torch
 import torch.nn as nn
-
 from gliner.modeling.utils import extract_prompt_features_and_word_embeddings
 
 try:
@@ -62,7 +61,7 @@ class GLiNERRerankPooler(nn.Module):
 
         sequences, offset = [], 0
         for L in prompt_lens:
-            sequences.append(hidden_states[offset:offset + L])
+            sequences.append(hidden_states[offset : offset + L])
             offset += L
         return sequences
 
@@ -107,8 +106,7 @@ class GLiNERRerankPooler(nn.Module):
 
         if not pp_list:
             return [
-                torch.zeros(4, device=hidden_states.device, dtype=torch.float32)
-                for _ in sequences
+                torch.zeros(4, device=hidden_states.device, dtype=torch.float32) for _ in sequences
             ]
 
         while len(pp_list) < len(sequences):
@@ -121,7 +119,6 @@ class GLiNERRerankPooler(nn.Module):
 
         outputs: List[torch.Tensor] = []
         dev = hidden_states.device
-        H = hidden_states.shape[-1]
 
         for i, tok in enumerate(sequences):
             add = self._get_extra_kwargs(pp_list[i])

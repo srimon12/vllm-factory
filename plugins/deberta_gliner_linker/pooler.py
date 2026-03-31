@@ -63,13 +63,13 @@ class GLiNERLinkerPooler(nn.Module):
         super().__init__()
         # Use object.__setattr__ to avoid nn.Module submodule registration
         # which would create circular references (model → pooler → model's children)
-        object.__setattr__(self, '_labels_encoder', model.labels_encoder)
-        object.__setattr__(self, '_scorer_proj_token', model.scorer_proj_token)
-        object.__setattr__(self, '_scorer_proj_label', model.scorer_proj_label)
-        object.__setattr__(self, '_scorer_out_mlp', model.scorer_out_mlp)
-        object.__setattr__(self, '_model_config', model.vllm_config.model_config)
+        object.__setattr__(self, "_labels_encoder", model.labels_encoder)
+        object.__setattr__(self, "_scorer_proj_token", model.scorer_proj_token)
+        object.__setattr__(self, "_scorer_proj_label", model.scorer_proj_label)
+        object.__setattr__(self, "_scorer_out_mlp", model.scorer_out_mlp)
+        object.__setattr__(self, "_model_config", model.vllm_config.model_config)
         # Cached tokenizer (loaded lazily on first use)
-        object.__setattr__(self, '_tokenizer', None)
+        object.__setattr__(self, "_tokenizer", None)
 
     def get_supported_tasks(self) -> Set[str]:
         return {"embed"}
@@ -77,6 +77,7 @@ class GLiNERLinkerPooler(nn.Module):
     def get_pooling_updates(self, task=None):
         """Request token IDs in pooling metadata."""
         from vllm.model_executor.layers.pooler.common import PoolingParamsUpdate
+
         return PoolingParamsUpdate(requires_token_ids=True)
 
     @staticmethod
@@ -105,7 +106,7 @@ class GLiNERLinkerPooler(nn.Module):
 
         sequences, offset = [], 0
         for L in prompt_lens:
-            sequences.append(hidden_states[offset:offset + L])
+            sequences.append(hidden_states[offset : offset + L])
             offset += L
         return sequences
 
@@ -145,8 +146,10 @@ class GLiNERLinkerPooler(nn.Module):
         """
         if self._tokenizer is None:
             from transformers import AutoTokenizer
+
             object.__setattr__(
-                self, '_tokenizer',
+                self,
+                "_tokenizer",
                 AutoTokenizer.from_pretrained(self._model_config.model, use_fast=True),
             )
 
@@ -212,6 +215,7 @@ class GLiNERLinkerPooler(nn.Module):
             sequences = self._extract_sequences(hidden_states, pooling_metadata)
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning("Pooler warmup fallback: %s", e)
             dummy = torch.zeros(4, device=hidden_states.device, dtype=hidden_states.dtype)
             return [dummy]
@@ -226,13 +230,12 @@ class GLiNERLinkerPooler(nn.Module):
 
         if not pp_list:
             return [
-                torch.zeros(4, device=hidden_states.device, dtype=torch.float32)
-                for _ in sequences
+                torch.zeros(4, device=hidden_states.device, dtype=torch.float32) for _ in sequences
             ]
 
         while len(pp_list) < len(sequences):
             pp_list.append(None)
-        pp_list = pp_list[:len(sequences)]
+        pp_list = pp_list[: len(sequences)]
 
         outputs: List[torch.Tensor] = []
         dev = hidden_states.device

@@ -59,7 +59,9 @@ class ColQwen3Processor(BaseProcessor):
             metadata={"is_query": is_query},
         )
 
-    def postprocess(self, raw_output: Any, metadata: Optional[Dict] = None) -> Optional[torch.Tensor]:
+    def postprocess(
+        self, raw_output: Any, metadata: Optional[Dict] = None
+    ) -> Optional[torch.Tensor]:
         if raw_output is None:
             return None
         return torch.as_tensor(raw_output)

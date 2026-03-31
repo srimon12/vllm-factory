@@ -18,7 +18,9 @@ HF_MODEL = "knowledgator/gliner-linker-large-v1.0"
 
 def _resolve_model_path() -> str:
     from plugins.deberta_gliner_linker import get_model_path
+
     return get_model_path()
+
 
 TEST_TEXTS = [
     "Apple announced new products in California. Michael Jordan joined the team.",
@@ -96,7 +98,9 @@ def benchmark_vllm():
     weights_path = hf_hub_download(HF_MODEL, "pytorch_model.bin")
     state = torch.load(weights_path, map_location="cpu", weights_only=True)
     labels_prefix = "token_rep_layer.labels_encoder.model."
-    labels_state = {k[len(labels_prefix):]: v for k, v in state.items() if k.startswith(labels_prefix)}
+    labels_state = {
+        k[len(labels_prefix) :]: v for k, v in state.items() if k.startswith(labels_prefix)
+    }
     labels_model.load_state_dict(labels_state, strict=False)
     labels_model.eval().cuda()
 
@@ -128,13 +132,16 @@ def benchmark_vllm():
         gpu_memory_utilization=0.85,
     )
 
-    word_pattern = re.compile(r'\w+(?:[-_]\w+)*|\S')
+    word_pattern = re.compile(r"\w+(?:[-_]\w+)*|\S")
 
     def prepare_input(text):
         words = [m.group() for m in word_pattern.finditer(text)]
         tok_result = tokenizer(
-            [words], is_split_into_words=True,
-            return_tensors="pt", truncation=True, padding="longest",
+            [words],
+            is_split_into_words=True,
+            return_tensors="pt",
+            truncation=True,
+            padding="longest",
         )
         input_ids = tok_result["input_ids"][0]
 
@@ -192,9 +199,11 @@ def benchmark_vllm():
 if __name__ == "__main__":
     # Run GLiNER first
     q1 = mp.Queue()
+
     def run_gliner(q):
         r = benchmark_gliner()
         q.put(r)
+
     p1 = mp.Process(target=run_gliner, args=(q1,))
     p1.start()
     p1.join()
@@ -204,9 +213,11 @@ if __name__ == "__main__":
 
     # Run vLLM
     q2 = mp.Queue()
+
     def run_vllm(q):
         r = benchmark_vllm()
         q.put(r)
+
     p2 = mp.Process(target=run_vllm, args=(q2,))
     p2.start()
     p2.join()
@@ -221,13 +232,15 @@ if __name__ == "__main__":
         print("-" * 62)
 
         gs, vs = gliner_results["single_ms"], vllm_results["single_ms"]
-        print(f"{'Single text (ms)':<30} {gs:>10.1f} {vs:>10.1f} {gs/vs:>9.1f}x")
+        print(f"{'Single text (ms)':<30} {gs:>10.1f} {vs:>10.1f} {gs / vs:>9.1f}x")
 
         gb, vb = gliner_results["batch_ms"], vllm_results["batch_ms"]
-        print(f"{'Batch {0} texts (ms)'.format(gliner_results['batch_size']):<30} {gb:>10.1f} {vb:>10.1f} {gb/vb:>9.1f}x")
+        print(
+            f"{'Batch {0} texts (ms)'.format(gliner_results['batch_size']):<30} {gb:>10.1f} {vb:>10.1f} {gb / vb:>9.1f}x"
+        )
 
         gt = gliner_results["batch_size"] / (gb / 1000)
         vt = vllm_results["batch_size"] / (vb / 1000)
-        print(f"{'Throughput (texts/sec)':<30} {gt:>10.1f} {vt:>10.1f} {vt/gt:>9.1f}x")
+        print(f"{'Throughput (texts/sec)':<30} {gt:>10.1f} {vt:>10.1f} {vt / gt:>9.1f}x")
     else:
         print("Could not collect results from both benchmarks")

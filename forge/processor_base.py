@@ -253,11 +253,7 @@ class BaseProcessor(ABC):
                 async for result in self._engine.encode(
                     prepared.prompt, prepared.pooling_params, request_id
                 ):
-                    raw_data = (
-                        result.outputs.data
-                        if hasattr(result.outputs, "data")
-                        else None
-                    )
+                    raw_data = result.outputs.data if hasattr(result.outputs, "data") else None
 
                     # Step 3: Postprocess
                     return self.postprocess(raw_data, prepared.metadata)
@@ -306,10 +302,7 @@ class BaseProcessor(ABC):
         )
 
         # Replace exceptions with None
-        return [
-            r if not isinstance(r, BaseException) else None
-            for r in results
-        ]
+        return [r if not isinstance(r, BaseException) else None for r in results]
 
     # ------------------------------------------------------------------
     # Sync wrappers (convenience for non-async contexts)

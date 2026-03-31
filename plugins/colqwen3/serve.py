@@ -49,11 +49,10 @@ def main():
     # Install plugin so vLLM can find ColQwen3 model type
     try:
         import colqwen3  # noqa: F401 — triggers register()
+
         logger.info("ColQwen3 plugin registered")
     except ImportError:
-        logger.warning(
-            "colqwen3 package not installed — run: pip install -e plugins/colqwen3/"
-        )
+        logger.warning("colqwen3 package not installed — run: pip install -e plugins/colqwen3/")
 
     from forge.server import ModelServer
 
@@ -67,15 +66,18 @@ def main():
         dtype=args.dtype,
         quantization=args.quantization,
         enforce_eager=args.enforce_eager,
-        enable_prefix_caching=False,    # not beneficial for doc retrieval
-        enable_chunked_prefill=False,   # causes issues with multimodal inputs
+        enable_prefix_caching=False,  # not beneficial for doc retrieval
+        enable_chunked_prefill=False,  # causes issues with multimodal inputs
         trust_remote_code=True,
-        runner="pooling",               # vLLM 0.15.x embedding mode
+        runner="pooling",  # vLLM 0.15.x embedding mode
         extra_args=[
-            "--skip-mm-profiling",           # avoids OOM during VLM memory profiling
-            "--mm-processor-cache-gb", "1",  # reduce multimodal cache (default: 4GB)
-            "--limit-mm-per-prompt", '{"image": 1}',  # one image per request (ColPali)
-            "--uvicorn-log-level", "warning",
+            "--skip-mm-profiling",  # avoids OOM during VLM memory profiling
+            "--mm-processor-cache-gb",
+            "1",  # reduce multimodal cache (default: 4GB)
+            "--limit-mm-per-prompt",
+            '{"image": 1}',  # one image per request (ColPali)
+            "--uvicorn-log-level",
+            "warning",
             # Slow image processor is patched at Python import time in __init__.py
         ],
     )

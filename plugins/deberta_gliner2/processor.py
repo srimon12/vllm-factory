@@ -47,14 +47,23 @@ OUTPUT_TOKEN = "[OUTPUT]"
 DESC_TOKEN = "[DESCRIPTION]"
 
 SPECIAL_TOKENS = [
-    SEP_STRUCT, SEP_TEXT, P_TOKEN, C_TOKEN, E_TOKEN,
-    R_TOKEN, L_TOKEN, EXAMPLE_TOKEN, OUTPUT_TOKEN, DESC_TOKEN,
+    SEP_STRUCT,
+    SEP_TEXT,
+    P_TOKEN,
+    C_TOKEN,
+    E_TOKEN,
+    R_TOKEN,
+    L_TOKEN,
+    EXAMPLE_TOKEN,
+    OUTPUT_TOKEN,
+    DESC_TOKEN,
 ]
 
 
 # ==================================================================
 # Schema Processing (inference-only, no training augmentation)
 # ==================================================================
+
 
 def build_schema_for_entities(entity_types: List[str]) -> Dict:
     """Build schema dict for entity extraction."""
@@ -120,8 +129,10 @@ def build_schema_for_classification(tasks: Dict) -> Dict:
 # Schema → Token Sequence
 # ==================================================================
 
-def _transform_schema(parent, fields, child_prefix, prompt=None,
-                      label_descriptions=None, example_mode="none"):
+
+def _transform_schema(
+    parent, fields, child_prefix, prompt=None, label_descriptions=None, example_mode="none"
+):
     """Transform a single schema into a token sequence."""
     prompt_str = parent
     if prompt:
@@ -178,12 +189,16 @@ def infer_schemas_from_dict(schema: Dict) -> Dict:
             cls_labels = cls_item["labels"]
             descs = cls_item.get("label_descriptions", {})
             mode = "descriptions" if descs else "none"
-            schemas.append(_transform_schema(
-                task, cls_labels, L_TOKEN,
-                prompt=cls_item.get("prompt"),
-                label_descriptions=descs,
-                example_mode=mode,
-            ))
+            schemas.append(
+                _transform_schema(
+                    task,
+                    cls_labels,
+                    L_TOKEN,
+                    prompt=cls_item.get("prompt"),
+                    label_descriptions=descs,
+                    example_mode=mode,
+                )
+            )
             labels.append([])
             types.append("classifications")
 
@@ -193,6 +208,7 @@ def infer_schemas_from_dict(schema: Dict) -> Dict:
 # ==================================================================
 # Input Formatting
 # ==================================================================
+
 
 def format_input_with_mapping(tokenizer, schema_tokens_list, text_tokens):
     """Format schema + text into token IDs with segment mappings."""
@@ -240,6 +256,7 @@ def format_input_with_mapping(tokenizer, schema_tokens_list, text_tokens):
 # ==================================================================
 # Main Preprocessing
 # ==================================================================
+
 
 def preprocess(tokenizer, text: str, schema: Dict, token_pooling: str = "first"):
     """Preprocess text + schema for vLLM inference.
@@ -293,6 +310,7 @@ def preprocess(tokenizer, text: str, schema: Dict, token_pooling: str = "first")
 # Postprocessing
 # ==================================================================
 
+
 def decode_output(raw_output, schema: Dict, task_types: List[str] = None) -> Dict:
     """Decode raw vLLM output tensor back into structured results.
 
@@ -301,13 +319,13 @@ def decode_output(raw_output, schema: Dict, task_types: List[str] = None) -> Dic
 
     if isinstance(raw_output, list):
         data = raw_output
-    elif hasattr(raw_output, 'tolist'):
+    elif hasattr(raw_output, "tolist"):
         data = raw_output.tolist()
     else:
         data = list(raw_output)
 
     length = int(data[0])
-    byte_data = bytes([int(b) for b in data[1:length + 1]])
+    byte_data = bytes([int(b) for b in data[1 : length + 1]])
     results = json.loads(byte_data.decode("utf-8"))
     return results
 
@@ -328,6 +346,7 @@ def format_results(results: Dict, include_confidence: bool = False) -> Dict:
             logits = value.get("logits", [])
             labels = value.get("labels", [])
             import torch
+
             probs = torch.softmax(torch.tensor(logits), dim=-1)
             best = int(probs.argmax().item())
             if include_confidence:
@@ -362,10 +381,12 @@ def format_results(results: Dict, include_confidence: bool = False) -> Dict:
                 if include_confidence:
                     struct_list.append(inst)
                 else:
-                    struct_list.append({
-                        k: v["text"] if isinstance(v, dict) and "text" in v else v
-                        for k, v in inst.items()
-                    })
+                    struct_list.append(
+                        {
+                            k: v["text"] if isinstance(v, dict) and "text" in v else v
+                            for k, v in inst.items()
+                        }
+                    )
             formatted[key] = struct_list
 
     if relations:

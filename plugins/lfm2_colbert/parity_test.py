@@ -63,7 +63,9 @@ def phase_prepare():
     def encode_texts(texts, hf_model, weight):
         embeddings = []
         for text in texts:
-            tokens = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=False)
+            tokens = tokenizer(
+                text, return_tensors="pt", truncation=True, max_length=512, padding=False
+            )
             tokens = {k: v.cuda() for k, v in tokens.items()}
             with torch.no_grad():
                 out = hf_model(**tokens)
@@ -81,13 +83,16 @@ def phase_prepare():
     doc_embs = encode_texts(DOCUMENTS, model, proj_weight)
     print(f"  {len(doc_embs)} documents, shapes: {[e.shape for e in doc_embs]}")
 
-    torch.save({
-        "query_embeddings": query_embs,
-        "document_embeddings": doc_embs,
-        "queries": QUERIES,
-        "documents": DOCUMENTS,
-        "model": MODEL,
-    }, REF_FILE)
+    torch.save(
+        {
+            "query_embeddings": query_embs,
+            "document_embeddings": doc_embs,
+            "queries": QUERIES,
+            "documents": DOCUMENTS,
+            "model": MODEL,
+        },
+        REF_FILE,
+    )
     print(f"Saved to {REF_FILE}")
     print("Phase 1 complete\n")
 
@@ -149,9 +154,9 @@ def phase_test():
         return (an * bn).sum(dim=-1).mean().item()
 
     min_cos = 0.99
-    print(f"\n{'─'*60}")
+    print(f"\n{'─' * 60}")
     print(f"  Query parity (cosine >= {min_cos})")
-    print(f"{'─'*60}")
+    print(f"{'─' * 60}")
 
     all_passed = True
     for i, (ref_e, vllm_e) in enumerate(zip(ref_query_embs, vllm_query_embs)):
@@ -161,9 +166,9 @@ def phase_test():
         status = "PASS" if passed else "FAIL"
         print(f"  query_{i}: cos={cos:.6f}  {status}  ref={ref_e.shape} vllm={vllm_e.shape}")
 
-    print(f"\n{'─'*60}")
+    print(f"\n{'─' * 60}")
     print(f"  Document parity (cosine >= {min_cos})")
-    print(f"{'─'*60}")
+    print(f"{'─' * 60}")
 
     for i, (ref_e, vllm_e) in enumerate(zip(ref_doc_embs, vllm_doc_embs)):
         cos = cosine(ref_e, vllm_e)
@@ -172,7 +177,7 @@ def phase_test():
         status = "PASS" if passed else "FAIL"
         print(f"  doc_{i}:   cos={cos:.6f}  {status}  ref={ref_e.shape} vllm={vllm_e.shape}")
 
-    print(f"\n{'─'*60}")
+    print(f"\n{'─' * 60}")
     print(f"  Latency: {latency:.1f}ms for {len(QUERIES) + len(DOCUMENTS)} texts")
 
     if all_passed:

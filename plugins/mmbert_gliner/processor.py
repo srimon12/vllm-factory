@@ -43,9 +43,12 @@ class GLiNERModernBERTProcessor(BaseProcessor):
     def __init__(self, model_path: str, **kwargs):
         super().__init__(model_path, **kwargs)
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_path, use_fast=True, trust_remote_code=True,
+            model_path,
+            use_fast=True,
+            trust_remote_code=True,
         )
         from transformers import AutoConfig
+
         config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
 
         self._preprocessor = GLiNERPreprocessor(
@@ -99,7 +102,9 @@ class GLiNERModernBERTProcessor(BaseProcessor):
         if raw_output is None or metadata is None:
             return []
 
-        scores = torch.as_tensor(raw_output) if not isinstance(raw_output, torch.Tensor) else raw_output
+        scores = (
+            torch.as_tensor(raw_output) if not isinstance(raw_output, torch.Tensor) else raw_output
+        )
 
         # Extract shape prefix [L, K, C] and reshape to (B=1, L, K, C)
         if scores.dim() == 1 and scores.numel() > 3:

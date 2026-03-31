@@ -36,6 +36,7 @@ THRESHOLD = 0.5
 # Phase 1: Generate references + model dir
 # ======================================================================
 
+
 def phase_prepare():
     import safetensors.torch
     from gliner2 import GLiNER2
@@ -49,20 +50,30 @@ def phase_prepare():
 
     # Generate entity reference
     entities = model.extract_entities(
-        TEXT, ENTITY_LABELS, threshold=THRESHOLD,
-        include_confidence=True, include_spans=True,
+        TEXT,
+        ENTITY_LABELS,
+        threshold=THRESHOLD,
+        include_confidence=True,
+        include_spans=True,
     )
 
     # Generate classification reference
     classification = model.classify_text(
         TEXT,
-        {"topic": {"labels": ["technology", "finance", "sports", "healthcare"], "multi_label": False}},
+        {
+            "topic": {
+                "labels": ["technology", "finance", "sports", "healthcare"],
+                "multi_label": False,
+            }
+        },
         include_confidence=True,
     )
 
     # Generate relation reference
     relations = model.extract_relations(
-        TEXT, ["works_at", "reports_to"], threshold=0.3,
+        TEXT,
+        ["works_at", "reports_to"],
+        threshold=0.3,
         include_confidence=True,
     )
 
@@ -70,7 +81,8 @@ def phase_prepare():
     json_result = model.extract_json(
         TEXT,
         {"employee": ["name::str", "title::str", "company::str", "location::str", "email::str"]},
-        threshold=0.3, include_confidence=True,
+        threshold=0.3,
+        include_confidence=True,
     )
 
     print("\n--- Entity Results ---")
@@ -84,9 +96,12 @@ def phase_prepare():
 
     # Save references
     refs = {
-        "model": MODEL, "text": TEXT,
-        "entities": entities, "classification": classification,
-        "relations": relations, "json_structure": json_result,
+        "model": MODEL,
+        "text": TEXT,
+        "entities": entities,
+        "classification": classification,
+        "relations": relations,
+        "json_structure": json_result,
     }
     with open(REF_FILE, "w") as f:
         json.dump(refs, f, indent=2, default=str)
@@ -152,6 +167,7 @@ def phase_prepare():
 # Phase 2: vLLM inference + parity comparison
 # ======================================================================
 
+
 def phase_test():
     from transformers import AutoTokenizer
     from vllm import LLM, PoolingParams
@@ -215,7 +231,7 @@ def phase_test():
 
     ref_set = set()
     for etype, elist in ref_entities.items():
-        for e in (elist if isinstance(elist, list) else [elist]):
+        for e in elist if isinstance(elist, list) else [elist]:
             if isinstance(e, dict):
                 ref_set.add((e.get("text", e), etype))
             else:
@@ -223,7 +239,7 @@ def phase_test():
 
     vllm_set = set()
     for etype, elist in vllm_entities.items():
-        for e in (elist if isinstance(elist, list) else [elist]):
+        for e in elist if isinstance(elist, list) else [elist]:
             if isinstance(e, dict):
                 vllm_set.add((e.get("text", e), etype))
             else:
@@ -249,9 +265,11 @@ def phase_test():
 
     # ---- TEST 2: Classification ----
     print("\n--- TEST 2: Classification ---")
-    cls_schema = build_schema_for_classification({
-        "topic": {"labels": ["technology", "finance", "sports", "healthcare"]},
-    })
+    cls_schema = build_schema_for_classification(
+        {
+            "topic": {"labels": ["technology", "finance", "sports", "healthcare"]},
+        }
+    )
     cls_prep = preprocess(tokenizer, TEXT, cls_schema)
     cls_prompt = TokensPrompt(prompt_token_ids=cls_prep["input_ids"])
     cls_pp = PoolingParams(extra_kwargs=cls_prep)
@@ -261,8 +279,16 @@ def phase_test():
     print(f"vLLM: {json.dumps(cls_formatted, indent=2, default=str)}")
 
     ref_cls = ref.get("classification", {})
-    ref_label = ref_cls.get("topic", {}).get("label", "") if isinstance(ref_cls.get("topic"), dict) else ref_cls.get("topic", "")
-    vllm_label = cls_formatted.get("topic", {}).get("label", "") if isinstance(cls_formatted.get("topic"), dict) else cls_formatted.get("topic", "")
+    ref_label = (
+        ref_cls.get("topic", {}).get("label", "")
+        if isinstance(ref_cls.get("topic"), dict)
+        else ref_cls.get("topic", "")
+    )
+    vllm_label = (
+        cls_formatted.get("topic", {}).get("label", "")
+        if isinstance(cls_formatted.get("topic"), dict)
+        else cls_formatted.get("topic", "")
+    )
     cls_match = ref_label == vllm_label
     print(f"Classification Parity: ref={ref_label}, vllm={vllm_label}, match={cls_match}")
 
@@ -279,9 +305,11 @@ def phase_test():
 
     # ---- TEST 4: JSON Structure ----
     print("\n--- TEST 4: JSON Structure ---")
-    json_schema = build_schema_for_json({
-        "employee": ["name", "title", "company", "location", "email"],
-    })
+    json_schema = build_schema_for_json(
+        {
+            "employee": ["name", "title", "company", "location", "email"],
+        }
+    )
     json_prep = preprocess(tokenizer, TEXT, json_schema)
     json_prompt = TokensPrompt(prompt_token_ids=json_prep["input_ids"])
     json_pp = PoolingParams(extra_kwargs=json_prep)

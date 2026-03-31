@@ -24,13 +24,13 @@ from vllm.config import VllmConfig
 
 from poolers.gliner import GLiNERSpanPooler
 
-_ENCODER_PATH = Path(__file__).resolve().parents[2] / "models" / "modernbert" / "modernbert_encoder.py"
+_ENCODER_PATH = (
+    Path(__file__).resolve().parents[2] / "models" / "modernbert" / "modernbert_encoder.py"
+)
 
 
 def _import_modernbert_encoder():
-    spec = importlib.util.spec_from_file_location(
-        "modernbert_encoder", str(_ENCODER_PATH)
-    )
+    spec = importlib.util.spec_from_file_location("modernbert_encoder", str(_ENCODER_PATH))
     mod = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("modernbert_encoder", mod)
     spec.loader.exec_module(mod)
@@ -134,14 +134,18 @@ class GLiNERModernBertModel(nn.Module):
         """Returns encoder hidden states; pooler is called by vLLM pooling runner."""
         output = self.model(
             input_ids=input_ids,
-            position_ids=positions.unsqueeze(0) if positions is not None and positions.dim() == 1 else positions,
+            position_ids=positions.unsqueeze(0)
+            if positions is not None and positions.dim() == 1
+            else positions,
             inputs_embeds=inputs_embeds,
         )
 
         hidden_states = (
             output.last_hidden_state
             if hasattr(output, "last_hidden_state")
-            else output if isinstance(output, torch.Tensor) else output[0]
+            else output
+            if isinstance(output, torch.Tensor)
+            else output[0]
         )
 
         if hidden_states.dim() == 3:
@@ -156,6 +160,7 @@ class GLiNERModernBertModel(nn.Module):
         """Override sampling for pooling models — return empty outputs."""
         try:
             from vllm.sequence import SamplerOutput
+
             return SamplerOutput(outputs=[])
         except ImportError:
             return None
@@ -190,7 +195,7 @@ class GLiNERModernBertModel(nn.Module):
 
         for hf_name, tensor in weights:
             if hf_name.startswith(backbone_prefix):
-                hf_key = hf_name[len(backbone_prefix):]
+                hf_key = hf_name[len(backbone_prefix) :]
 
                 if hf_key not in vllm_backbone:
                     continue
@@ -199,16 +204,18 @@ class GLiNERModernBertModel(nn.Module):
                     target_shape = vllm_backbone[hf_key].shape
                     if tensor.shape[0] < target_shape[0]:
                         pad = torch.zeros(
-                            target_shape[0] - tensor.shape[0], tensor.shape[1],
-                            dtype=tensor.dtype, device=tensor.device,
+                            target_shape[0] - tensor.shape[0],
+                            tensor.shape[1],
+                            dtype=tensor.dtype,
+                            device=tensor.device,
                         )
                         tensor = torch.cat([tensor, pad], dim=0)
                     elif tensor.shape[0] > target_shape[0]:
-                        tensor = tensor[:target_shape[0], :]
+                        tensor = tensor[: target_shape[0], :]
 
                 backbone_state[hf_key] = tensor
             elif hf_name.startswith(projection_prefix):
-                local_key = hf_name[len(projection_prefix):]
+                local_key = hf_name[len(projection_prefix) :]
                 if local_key in vllm_projection:
                     projection_state[local_key] = tensor
             else:
@@ -228,7 +235,9 @@ class GLiNERModernBertModel(nn.Module):
 
         if self.projection is not None and projection_state:
             self.projection.load_state_dict(projection_state, strict=False)
-            print(f"[mmBERT-GLiNER] Loaded projection: {len(projection_state)}/{len(vllm_projection)} keys")
+            print(
+                f"[mmBERT-GLiNER] Loaded projection: {len(projection_state)}/{len(vllm_projection)} keys"
+            )
 
         self.pooler.load_state_dict(pooler_state, strict=False)
         print(f"[mmBERT-GLiNER] Loaded pooler: {len(pooler_state)}/{len(vllm_pooler)} keys")

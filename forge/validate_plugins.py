@@ -124,7 +124,7 @@ def _extract_probe_json(output: str) -> dict:
     marker = "PROBE_JSON:"
     for line in output.splitlines():
         if line.startswith(marker):
-            raw = line[len(marker):].strip()
+            raw = line[len(marker) :].strip()
             try:
                 return json.loads(raw)
             except json.JSONDecodeError:
@@ -208,8 +208,12 @@ print("PROBE_JSON:", json.dumps(payload))
         output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
         exit_code: Optional[int] = proc.returncode
     except subprocess.TimeoutExpired as e:
-        stdout = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
-        stderr = e.stderr.decode(errors="replace") if isinstance(e.stderr, bytes) else (e.stderr or "")
+        stdout = (
+            e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+        )
+        stderr = (
+            e.stderr.decode(errors="replace") if isinstance(e.stderr, bytes) else (e.stderr or "")
+        )
         output = stdout + ("\n" + stderr if stderr else "") + "\nPROBE_TIMEOUT"
         exit_code = None
     elapsed = time.perf_counter() - started

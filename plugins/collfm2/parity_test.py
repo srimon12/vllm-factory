@@ -51,6 +51,7 @@ VISUAL_PROMPT_PREFIX = "<|im_start|>user\n<image>Describe the image.<|im_end|>"
 # Reference (HuggingFace)
 # ---------------------------------------------------------------------------
 
+
 def _sdpa_patch():
     """Context manager: force sdpa instead of flash_attention_2 in ColLFM2 loading."""
     from contextlib import contextmanager
@@ -60,14 +61,17 @@ def _sdpa_patch():
     @contextmanager
     def _ctx():
         _orig = AutoModelForImageTextToText.from_pretrained
+
         def _wrap(*args, **kwargs):
             kwargs["attn_implementation"] = "sdpa"
             return _orig(*args, **kwargs)
+
         AutoModelForImageTextToText.from_pretrained = _wrap
         try:
             yield
         finally:
             AutoModelForImageTextToText.from_pretrained = _orig
+
     return _ctx()
 
 
@@ -129,6 +133,7 @@ def _run_reference_images(
 # ---------------------------------------------------------------------------
 # vLLM (offline, via LLM.encode())
 # ---------------------------------------------------------------------------
+
 
 def _run_vllm_queries(model_path: str, queries: List[str]) -> List[torch.Tensor]:
     """Embed queries via vLLM offline (uses plugin preprocessing)."""
@@ -224,6 +229,7 @@ def _run_vllm_images(model_path: str, images) -> List[torch.Tensor]:
 # Parity metric helpers
 # ---------------------------------------------------------------------------
 
+
 def _cosine_sim_per_sample(ref: torch.Tensor, vllm: torch.Tensor) -> float:
     """Mean cosine similarity between two variable-length embedding tensors."""
     min_len = min(ref.shape[0], vllm.shape[0])
@@ -233,11 +239,11 @@ def _cosine_sim_per_sample(ref: torch.Tensor, vllm: torch.Tensor) -> float:
 
 
 def _print_parity_table(label: str, ref_embs, vllm_embs, inputs, min_cos: float = 0.99):
-    print(f"\n{'─'*70}")
+    print(f"\n{'─' * 70}")
     print(f"  {label} parity  (threshold: cosine ≥ {min_cos})")
-    print(f"{'─'*70}")
+    print(f"{'─' * 70}")
     print(f"  {'#':<4} {'Input':<40} {'Cosine':>8} {'Status':>8}")
-    print(f"  {'-'*4} {'-'*40} {'-'*8} {'-'*8}")
+    print(f"  {'-' * 4} {'-' * 40} {'-' * 8} {'-' * 8}")
 
     all_passed = True
     for i, (ref, vllm_emb, inp) in enumerate(zip(ref_embs, vllm_embs, inputs)):
@@ -248,7 +254,7 @@ def _print_parity_table(label: str, ref_embs, vllm_embs, inputs, min_cos: float 
         status = "✓ PASS" if passed else "✗ FAIL"
         print(f"  {i:<4} {label_short:<40} {cos:>8.6f} {status:>8}")
 
-    print(f"{'─'*70}")
+    print(f"{'─' * 70}")
     overall = "✅ ALL PASSED" if all_passed else "❌ SOME FAILED"
     print(f"  Overall: {overall}")
     return all_passed
@@ -270,12 +276,14 @@ def _make_synthetic_image():
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     p = argparse.ArgumentParser(description="ColLFM2 parity test: vLLM vs HuggingFace reference")
     p.add_argument("--model", required=True, help="HuggingFace model ID or local path")
     p.add_argument(
-        "--reference-dir", default=None,
-        help="Pre-generated reference dir from generate_reference.py (optional)"
+        "--reference-dir",
+        default=None,
+        help="Pre-generated reference dir from generate_reference.py (optional)",
     )
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--min-cosine-sim", type=float, default=0.99)
@@ -289,13 +297,12 @@ def main():
         if _p not in sys.path:
             sys.path.insert(0, _p)
 
-
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("ColLFM2 Parity Test")
     print(f"  model:         {args.model}")
     print(f"  device:        {args.device}")
     print(f"  min_cosine:    {args.min_cosine_sim}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     # -----------------------------------------------------------------------
     # Load or generate reference query embeddings
@@ -304,7 +311,7 @@ def main():
         ref_dir = Path(args.reference_dir)
         print(f"\n[1/4] Loading pre-computed reference query embeddings from {ref_dir}...")
         ref_query_embs = torch.load(ref_dir / "reference_query_embeddings.pt", weights_only=True)
-        queries = SAMPLE_QUERIES[:len(ref_query_embs)]
+        queries = SAMPLE_QUERIES[: len(ref_query_embs)]
     else:
         print("\n[1/4] Computing reference query embeddings (HF model)...")
         queries = SAMPLE_QUERIES
@@ -335,6 +342,7 @@ def main():
             img_path = ref_dir / f"test_image_{i}.png"
             if img_path.exists():
                 from PIL import Image
+
                 images[i] = Image.open(img_path)
     else:
         print("\n[3/4] Computing reference image embeddings (HF model)...")
@@ -345,7 +353,9 @@ def main():
     print("\n[4/4] Computing vLLM image embeddings...")
     vllm_image_embs = _run_vllm_images(args.model, images)
     image_passed = _print_parity_table(
-        "Image", ref_image_embs, vllm_image_embs,
+        "Image",
+        ref_image_embs,
+        vllm_image_embs,
         [f"image_{i}" for i in range(len(images))],
         args.min_cosine_sim,
     )
@@ -360,23 +370,27 @@ def main():
     # Build aggregate parity result for queries (mean cosine)
     cosines = [_cosine_sim_per_sample(r, v) for r, v in zip(ref_query_embs, vllm_query_embs)]
     mean_cos = sum(cosines) / len(cosines)
-    harness.report.parity_results.append(ParityResult(
-        cosine_similarity=mean_cos,
-        max_absolute_error=0.0,   # not directly comparable (variable lengths)
-        mean_absolute_error=0.0,
-        passed=query_passed,
-        details=f"Queries ({len(queries)}) — mean cosine={mean_cos:.6f}",
-    ))
+    harness.report.parity_results.append(
+        ParityResult(
+            cosine_similarity=mean_cos,
+            max_absolute_error=0.0,  # not directly comparable (variable lengths)
+            mean_absolute_error=0.0,
+            passed=query_passed,
+            details=f"Queries ({len(queries)}) — mean cosine={mean_cos:.6f}",
+        )
+    )
 
     img_cosines = [_cosine_sim_per_sample(r, v) for r, v in zip(ref_image_embs, vllm_image_embs)]
     mean_img_cos = sum(img_cosines) / len(img_cosines)
-    harness.report.parity_results.append(ParityResult(
-        cosine_similarity=mean_img_cos,
-        max_absolute_error=0.0,
-        mean_absolute_error=0.0,
-        passed=image_passed,
-        details=f"Images ({len(images)}) — mean cosine={mean_img_cos:.6f}",
-    ))
+    harness.report.parity_results.append(
+        ParityResult(
+            cosine_similarity=mean_img_cos,
+            max_absolute_error=0.0,
+            mean_absolute_error=0.0,
+            passed=image_passed,
+            details=f"Images ({len(images)}) — mean cosine={mean_img_cos:.6f}",
+        )
+    )
 
     report_path = Path(args.report_dir) / "parity_report.md"
     harness.generate_report(str(report_path))
@@ -385,13 +399,13 @@ def main():
     # Final verdict
     # -----------------------------------------------------------------------
     all_passed = query_passed and image_passed
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     if all_passed:
         print("✅ PARITY TEST PASSED — vLLM matches HuggingFace reference")
     else:
         print("❌ PARITY TEST FAILED — see table above for failing cases")
     print(f"   Report: {report_path}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     sys.exit(0 if all_passed else 1)
 

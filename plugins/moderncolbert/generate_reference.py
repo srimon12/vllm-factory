@@ -115,6 +115,7 @@ def main():
     # ------------------------------------------------------------------ #
     print("\n[1/5] Loading PyLate ColBERT model...")
     from pylate import models
+
     model = models.ColBERT(model_name_or_path=args.model)
     print("  ✓ Model loaded")
 
@@ -164,8 +165,12 @@ def main():
     print("\n[5/5] Measuring PyLate baseline throughput...")
     q_stats = time_encode(model, QUERIES, is_query=True)
     d_stats = time_encode(model, DOCUMENTS, is_query=False)
-    print(f"  queries:   {q_stats['req_per_s']} req/s  p50={q_stats['p50_ms']}ms  p99={q_stats['p99_ms']}ms")
-    print(f"  documents: {d_stats['req_per_s']} req/s  p50={d_stats['p50_ms']}ms  p99={d_stats['p99_ms']}ms")
+    print(
+        f"  queries:   {q_stats['req_per_s']} req/s  p50={q_stats['p50_ms']}ms  p99={q_stats['p99_ms']}ms"
+    )
+    print(
+        f"  documents: {d_stats['req_per_s']} req/s  p50={d_stats['p50_ms']}ms  p99={d_stats['p99_ms']}ms"
+    )
 
     stats = {"queries": q_stats, "documents": d_stats}
     (out / "hf_benchmark.json").write_text(json.dumps(stats, indent=2))

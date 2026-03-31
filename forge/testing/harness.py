@@ -219,12 +219,14 @@ class ModelTestHarness:
 
         # Parity results
         if self.report.parity_results:
-            lines.extend([
-                "## Parity Results",
-                "",
-                "| # | Cosine Sim | Max Error | Mean Error | Status |",
-                "|---|-----------|-----------|------------|--------|",
-            ])
+            lines.extend(
+                [
+                    "## Parity Results",
+                    "",
+                    "| # | Cosine Sim | Max Error | Mean Error | Status |",
+                    "|---|-----------|-----------|------------|--------|",
+                ]
+            )
             for i, r in enumerate(self.report.parity_results, 1):
                 status = "✅ PASS" if r.passed else "❌ FAIL"
                 lines.append(
@@ -235,12 +237,14 @@ class ModelTestHarness:
 
         # Benchmark results
         if self.report.benchmark_results:
-            lines.extend([
-                "## Benchmark Results",
-                "",
-                "| Batch Size | Tokens/sec | P50 (ms) | P95 (ms) | P99 (ms) |",
-                "|-----------|-----------|---------|---------|---------|",
-            ])
+            lines.extend(
+                [
+                    "## Benchmark Results",
+                    "",
+                    "| Batch Size | Tokens/sec | P50 (ms) | P95 (ms) | P99 (ms) |",
+                    "|-----------|-----------|---------|---------|---------|",
+                ]
+            )
             for r in self.report.benchmark_results:
                 lines.append(
                     f"| {r.batch_size} | {r.tokens_per_second:,.0f} | "
@@ -252,6 +256,7 @@ class ModelTestHarness:
         content = "\n".join(lines)
 
         from pathlib import Path
+
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(content)
         print(f"\n📊 Report written to {output_path}")
@@ -269,7 +274,5 @@ class ModelTestHarness:
         a_flat = a_flat[:min_len]
         b_flat = b_flat[:min_len]
 
-        cos = torch.nn.functional.cosine_similarity(
-            a_flat.unsqueeze(0), b_flat.unsqueeze(0)
-        )
+        cos = torch.nn.functional.cosine_similarity(a_flat.unsqueeze(0), b_flat.unsqueeze(0))
         return cos.item()

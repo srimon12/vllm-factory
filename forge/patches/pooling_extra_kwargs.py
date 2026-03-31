@@ -53,22 +53,23 @@ def find_protocol_file() -> str:
     for prefix in site.getsitepackages() + [site.getusersitepackages()]:
         candidate = os.path.join(
             prefix,
-            "vllm", "entrypoints", "pooling", "pooling", "protocol.py",
+            "vllm",
+            "entrypoints",
+            "pooling",
+            "pooling",
+            "protocol.py",
         )
         if os.path.isfile(candidate):
             return candidate
 
     # Fallback: search sys.path
     for p in sys.path:
-        candidate = os.path.join(
-            p, "vllm", "entrypoints", "pooling", "pooling", "protocol.py"
-        )
+        candidate = os.path.join(p, "vllm", "entrypoints", "pooling", "pooling", "protocol.py")
         if os.path.isfile(candidate):
             return candidate
 
     raise FileNotFoundError(
-        "Cannot locate vllm/entrypoints/pooling/pooling/protocol.py. "
-        "Is vLLM 0.15.x installed?"
+        "Cannot locate vllm/entrypoints/pooling/pooling/protocol.py. Is vLLM 0.15.x installed?"
     )
 
 
@@ -136,7 +137,7 @@ def _ensure_any_import(content: str) -> str:
         if "Any" not in items:
             items.insert(0, "Any")
         new_line = f"from typing import {', '.join(items)}"
-        return content[:match.start()] + new_line + content[match.end():]
+        return content[: match.start()] + new_line + content[match.end() :]
 
     insertion = "from typing import Any\n"
     future_match = re.search(r"^from __future__ import .+$", content, flags=re.MULTILINE)
@@ -188,7 +189,7 @@ def _inject_extra_kwargs_field_in_class(
 
     indent = fn_match.group(1)
     field = (
-        f'{indent}extra_kwargs: dict[str, Any] | None = Field(\n'
+        f"{indent}extra_kwargs: dict[str, Any] | None = Field(\n"
         f"{indent}    default=None,\n"
         f'{indent}    description="{description}",\n'
         f"{indent})\n\n"
@@ -216,11 +217,7 @@ def _inject_extra_kwargs_in_pooling_params(class_block: str) -> tuple[str, bool]
     arg_indent = arg_indent_match.group(1) if arg_indent_match else "        "
     injected = args + f"{arg_indent}extra_kwargs=self.extra_kwargs,\n"
 
-    new_block = (
-        class_block[:match.start("args")]
-        + injected
-        + class_block[match.end("args"):]
-    )
+    new_block = class_block[: match.start("args")] + injected + class_block[match.end("args") :]
     return new_block, True
 
 
@@ -293,7 +290,7 @@ def _patch_response_data(content: str) -> tuple[str, bool]:
 
     Returns (new_content, changed).
     """
-    if re.search(r'data:\s*Any', content):
+    if re.search(r"data:\s*Any", content):
         print("[PATCH] PoolingResponseData.data: already patched")
         return content, False
 
@@ -312,9 +309,7 @@ def _patch_response_data(content: str) -> tuple[str, bool]:
             "or base64 str) -- required for GLiNER/span-predictor logits"
         )
         class_block_new = (
-            class_block[:field_match.start()]
-            + new_field
-            + class_block[field_match.end():]
+            class_block[: field_match.start()] + new_field + class_block[field_match.end() :]
         )
         content = _replace_class_block(content, "PoolingResponseData", class_block_new)
         print("[PATCH] PoolingResponseData.data: patched to accept Any")
@@ -344,6 +339,7 @@ def patch_file(path: str) -> bool:
     cache_dir = os.path.join(os.path.dirname(path), "__pycache__")
     if os.path.isdir(cache_dir):
         import shutil
+
         shutil.rmtree(cache_dir)
 
     print(f"[PATCH] Successfully patched: {path}")
@@ -353,10 +349,7 @@ def patch_file(path: str) -> bool:
 def verify_patch() -> bool:
     """Verify both patches work by importing and testing."""
     # Force reimport
-    mods_to_remove = [
-        k for k in sys.modules
-        if "vllm.entrypoints.pooling" in k
-    ]
+    mods_to_remove = [k for k in sys.modules if "vllm.entrypoints.pooling" in k]
     for k in mods_to_remove:
         del sys.modules[k]
 
@@ -365,6 +358,7 @@ def verify_patch() -> bool:
     # 1. Verify extra_kwargs passthrough
     try:
         from vllm.entrypoints.pooling.pooling.protocol import PoolingCompletionRequest
+
         req = PoolingCompletionRequest(
             input="test",
             extra_kwargs={"entity_spans": [[0, 1]], "test": True},
@@ -380,6 +374,7 @@ def verify_patch() -> bool:
     # 2. Verify PoolingResponseData accepts 3D data
     try:
         from vllm.entrypoints.pooling.pooling.protocol import PoolingResponseData
+
         resp1d = PoolingResponseData(index=0, data=[0.1, 0.2, 0.3])
         assert resp1d.data == [0.1, 0.2, 0.3], "1D data failed"
 

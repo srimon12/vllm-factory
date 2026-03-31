@@ -24,14 +24,13 @@ from __future__ import annotations
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from transformers import AutoTokenizer
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
-from vllm.inputs.data import PromptType
 from vllm.inputs import TokensPrompt
+from vllm.inputs.data import PromptType
 from vllm.outputs import PoolingRequestOutput
 from vllm.plugins.io_processors.interface import IOProcessor
 from vllm.pooling_params import PoolingParams
@@ -57,6 +56,7 @@ _SCHEMA_BUILDERS = {
 @dataclass
 class GLiNER2Input:
     """Validated extraction request after parse_request."""
+
     text: str
     labels: Any
     task_type: str
@@ -81,7 +81,9 @@ class DeBERTaGLiNER2IOProcessor(IOProcessor[GLiNER2Input, Dict]):
 
         model_id = vllm_config.model_config.model
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_id, use_fast=True, trust_remote_code=True,
+            model_id,
+            use_fast=True,
+            trust_remote_code=True,
         )
 
         self._lock = threading.Lock()
@@ -119,9 +121,7 @@ class DeBERTaGLiNER2IOProcessor(IOProcessor[GLiNER2Input, Dict]):
             data = request
 
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Expected dict with 'text' and 'labels' keys, got {type(data)}"
-            )
+            raise ValueError(f"Expected dict with 'text' and 'labels' keys, got {type(data)}")
 
         labels = data.get("labels", [])
         if not labels:
@@ -131,8 +131,7 @@ class DeBERTaGLiNER2IOProcessor(IOProcessor[GLiNER2Input, Dict]):
         builder = _SCHEMA_BUILDERS.get(task_type)
         if builder is None:
             raise ValueError(
-                f"Unknown task_type '{task_type}'. "
-                f"Must be one of: {list(_SCHEMA_BUILDERS)}"
+                f"Unknown task_type '{task_type}'. Must be one of: {list(_SCHEMA_BUILDERS)}"
             )
 
         schema = builder(labels)
@@ -189,7 +188,8 @@ class DeBERTaGLiNER2IOProcessor(IOProcessor[GLiNER2Input, Dict]):
         return TokensPrompt(prompt_token_ids=ids_list)
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         with self._lock:
             extra = self._pending_extra_kwargs
@@ -228,7 +228,8 @@ class DeBERTaGLiNER2IOProcessor(IOProcessor[GLiNER2Input, Dict]):
         return format_results(results)
 
     def output_to_response(
-        self, plugin_output: Dict,
+        self,
+        plugin_output: Dict,
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

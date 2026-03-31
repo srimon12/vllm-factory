@@ -37,7 +37,7 @@ THRESHOLD = 0.5
 MAX_WIDTH = 12
 ENT_TOKEN = "<<ENT>>"
 SEP_TOKEN = "<<SEP>>"
-WORD_PATTERN = re.compile(r'\w+(?:[-_]\w+)*|\S')
+WORD_PATTERN = re.compile(r"\w+(?:[-_]\w+)*|\S")
 
 
 def split_text_into_words(text):
@@ -56,7 +56,9 @@ def run_gliner_reference():
     # Large encoder init (trunc_normal_/erfinv) is very slow on CPU; force GPU.
     if torch.cuda.is_available():
         torch.set_default_device("cuda")
-    model = GLiNER.from_pretrained(MODEL, map_location="cuda" if torch.cuda.is_available() else "cpu")
+    model = GLiNER.from_pretrained(
+        MODEL, map_location="cuda" if torch.cuda.is_available() else "cpu"
+    )
     model.eval()
 
     # Warmup
@@ -108,7 +110,9 @@ def prepare_local_model(gliner_model):
         "num_decoder_layers": encoder_config.get("num_decoder_layers", 24),
         "num_heads": encoder_config.get("num_heads", 16),
         "relative_attention_num_buckets": encoder_config.get("relative_attention_num_buckets", 32),
-        "relative_attention_max_distance": encoder_config.get("relative_attention_max_distance", 128),
+        "relative_attention_max_distance": encoder_config.get(
+            "relative_attention_max_distance", 128
+        ),
         "dropout_rate": encoder_config.get("dropout_rate", 0.1),
         "layer_norm_epsilon": encoder_config.get("layer_norm_epsilon", 1e-6),
         "feed_forward_proj": encoder_config.get("feed_forward_proj", "gated-gelu"),
@@ -129,7 +133,9 @@ def prepare_local_model(gliner_model):
     os.makedirs(LOCAL_MODEL_DIR, exist_ok=True)
     with open(os.path.join(LOCAL_MODEL_DIR, "config.json"), "w") as f:
         json.dump(vllm_config, f, indent=2)
-    print(f"Config saved: d_model={vllm_config['d_model']}, hidden={vllm_config['gliner_hidden_size']}")
+    print(
+        f"Config saved: d_model={vllm_config['d_model']}, hidden={vllm_config['gliner_hidden_size']}"
+    )
 
     # Save weights with shared tensor dedup
     state_dict = gliner_model.model.state_dict()
@@ -144,6 +150,7 @@ def prepare_local_model(gliner_model):
             deduped[k] = v.clone().contiguous()
 
     import safetensors.torch
+
     safetensors.torch.save_file(deduped, os.path.join(LOCAL_MODEL_DIR, "model.safetensors"))
     tokenizer.save_pretrained(LOCAL_MODEL_DIR)
     print(f"Weights: {len(deduped)} tensors, tokenizer saved")
@@ -191,26 +198,23 @@ def run_vllm_gliner():
     tokenized = tokenizer(
         input_words,
         is_split_into_words=True,
-        return_tensors='pt',
+        return_tensors="pt",
         truncation=True,
         padding=False,
     )
-    input_ids = tokenized['input_ids'][0]  # (seq_len,)
-    attention_mask = tokenized['attention_mask'][0]
+    input_ids = tokenized["input_ids"][0]  # (seq_len,)
+    attention_mask = tokenized["attention_mask"][0]
 
     print(f"Input tokens: {len(input_ids)}")
 
     # --- 4. Build words_mask from word_ids() (matches superpod exactly) ---
     word_ids_list = tokenized.word_ids(batch_index=0)
-    word_ids = torch.tensor(
-        [w if w is not None else -1 for w in word_ids_list],
-        dtype=torch.long
-    )
+    word_ids = torch.tensor([w if w is not None else -1 for w in word_ids_list], dtype=torch.long)
     prev_word_ids = torch.roll(word_ids, 1, dims=0)
     prev_word_ids[0] = -1
 
     is_new_word = (word_ids != -1) & (word_ids != prev_word_ids)
-    is_in_text = (word_ids >= prompt_len)
+    is_in_text = word_ids >= prompt_len
     valid_indices = is_new_word & is_in_text
 
     words_mask = torch.zeros_like(word_ids)
@@ -339,13 +343,15 @@ def decode_entities(logits, tokens, id_to_classes, word_positions, text, thresho
             start_char = word_positions[s][0]
             end_char = word_positions[e][1]
             entity_text = text[start_char:end_char]
-            entities.append({
-                "text": entity_text,
-                "label": label,
-                "score": round(score, 4),
-                "start": start_char,
-                "end": end_char,
-            })
+            entities.append(
+                {
+                    "text": entity_text,
+                    "label": label,
+                    "score": round(score, 4),
+                    "start": start_char,
+                    "end": end_char,
+                }
+            )
 
     return entities
 
@@ -398,9 +404,14 @@ if __name__ == "__main__":
     import argparse  # noqa: E401, I001
     import subprocess
     import sys
+
     parser = argparse.ArgumentParser(description="MT5 GLiNER Parity Test")
-    parser.add_argument("--prepare", action="store_true", help="Phase 1 only: GLiNER reference + model dir")
-    parser.add_argument("--test", action="store_true", help="Phase 2 only: vLLM inference + compare")
+    parser.add_argument(
+        "--prepare", action="store_true", help="Phase 1 only: GLiNER reference + model dir"
+    )
+    parser.add_argument(
+        "--test", action="store_true", help="Phase 2 only: vLLM inference + compare"
+    )
     args = parser.parse_args()
 
     REF_FILE = "/tmp/mt5-gliner-reference.json"
@@ -409,11 +420,15 @@ if __name__ == "__main__":
         ref_entities, ref_latency, gliner_model = run_gliner_reference()
         prepare_local_model(gliner_model)
         import json as _json
+
         with open(REF_FILE, "w") as _f:
-            _json.dump({"entities": ref_entities, "latency": ref_latency}, _f, indent=2, default=str)
+            _json.dump(
+                {"entities": ref_entities, "latency": ref_latency}, _f, indent=2, default=str
+            )
         print(f"Saved references to {REF_FILE}")
     elif args.test:
         import json as _json
+
         with open(REF_FILE) as _f:
             _ref = _json.load(_f)
         ref_entities = _ref["entities"]

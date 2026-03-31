@@ -68,10 +68,9 @@ async def run_benchmark(
     async with aiohttp.ClientSession(connector=connector) as session:
         # Warmup — critical for accurate results (JIT compilation, CUDA graphs, etc.)
         print(f"  Warming up ({warmup} requests, ~{seq_len} tokens/req)...")
-        await asyncio.gather(*[
-            send_request(session, url, model, texts[i % len(texts)])
-            for i in range(warmup)
-        ])
+        await asyncio.gather(
+            *[send_request(session, url, model, texts[i % len(texts)]) for i in range(warmup)]
+        )
 
         # Timed run with bounded concurrency
         print(f"  Timed run ({num_requests} requests, concurrency={concurrency})...")
@@ -82,19 +81,19 @@ async def run_benchmark(
                 return await send_request(session, url, model, text)
 
         start = time.perf_counter()
-        latencies = sorted(await asyncio.gather(*[
-            bounded(texts[i % len(texts)]) for i in range(num_requests)
-        ]))
+        latencies = sorted(
+            await asyncio.gather(*[bounded(texts[i % len(texts)]) for i in range(num_requests)])
+        )
         elapsed = time.perf_counter() - start
 
     n = len(latencies)
     return {
-        "req/s":   round(num_requests / elapsed, 1),
-        "p50_ms":  round(statistics.median(latencies), 1),
-        "p95_ms":  round(latencies[int(n * 0.95)], 1),
-        "p99_ms":  round(latencies[int(n * 0.99)], 1),
+        "req/s": round(num_requests / elapsed, 1),
+        "p50_ms": round(statistics.median(latencies), 1),
+        "p95_ms": round(latencies[int(n * 0.95)], 1),
+        "p99_ms": round(latencies[int(n * 0.99)], 1),
         "total_s": round(elapsed, 2),
-        "n":       num_requests,
+        "n": num_requests,
         "concurrency": concurrency,
     }
 
@@ -106,8 +105,9 @@ def main():
     p.add_argument("--num-requests", type=int, default=500)
     p.add_argument("--concurrency", type=int, default=16)
     p.add_argument("--warmup", type=int, default=200)
-    p.add_argument("--seq-len", type=int, default=128,
-                   help="Approximate input length in tokens (default: 128)")
+    p.add_argument(
+        "--seq-len", type=int, default=128, help="Approximate input length in tokens (default: 128)"
+    )
     args = p.parse_args()
 
     print("\nColLFM2 Benchmark")
@@ -119,17 +119,23 @@ def main():
     print(f"  seq_len:     {args.seq_len}")
     print()
 
-    results = asyncio.run(run_benchmark(
-        args.base_url, args.model,
-        args.num_requests, args.concurrency, args.warmup, args.seq_len,
-    ))
+    results = asyncio.run(
+        run_benchmark(
+            args.base_url,
+            args.model,
+            args.num_requests,
+            args.concurrency,
+            args.warmup,
+            args.seq_len,
+        )
+    )
 
-    print(f"\n{'─'*40}")
+    print(f"\n{'─' * 40}")
     print(f"  req/s:   {results['req/s']}")
     print(f"  p50_ms:  {results['p50_ms']}")
     print(f"  p95_ms:  {results['p95_ms']}")
     print(f"  p99_ms:  {results['p99_ms']}")
-    print(f"{'─'*40}\n")
+    print(f"{'─' * 40}\n")
 
 
 if __name__ == "__main__":

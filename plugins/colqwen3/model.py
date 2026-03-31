@@ -33,6 +33,7 @@ from vllm.multimodal import MULTIMODAL_REGISTRY
 # This replaces the global monkey-patch that previously leaked into all models.
 # ---------------------------------------------------------------------------
 
+
 class ColQwen3ProcessingInfo(Qwen3VLProcessingInfo):
     """Processing info that forces the slow Qwen2VLImageProcessor.
 
@@ -47,11 +48,12 @@ class ColQwen3ProcessingInfo(Qwen3VLProcessingInfo):
 
         # If the image processor is the fast version, replace its
         # size parameters with the slow processor's defaults
-        if type(image_processor).__name__ == 'Qwen2VLImageProcessorFast':
+        if type(image_processor).__name__ == "Qwen2VLImageProcessorFast":
             try:
                 from transformers.models.qwen2_vl.image_processing_qwen2_vl import (
                     Qwen2VLImageProcessor,
                 )
+
                 slow = Qwen2VLImageProcessor.from_pretrained(
                     self.ctx.model_config.model,
                     trust_remote_code=True,
@@ -67,7 +69,9 @@ class ColPaliProjection(nn.Module):
 
     def __init__(self, hidden_size: int, colpali_dim: int = 128, quant_config=None):
         super().__init__()
-        self.linear = ReplicatedLinear(hidden_size, colpali_dim, bias=True, quant_config=quant_config)
+        self.linear = ReplicatedLinear(
+            hidden_size, colpali_dim, bias=True, quant_config=quant_config
+        )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         projected, _ = self.linear(hidden_states)
@@ -116,13 +120,18 @@ class Qwen3VLForColPali(Qwen3VLForConditionalGeneration):
             self.pooler = pooler_for_token_embed(pooler_config)
         else:
             from vllm.config import PoolerConfig
+
             self.pooler = pooler_for_token_embed(PoolerConfig(pooling_type="ALL"))
 
-    def forward(self, input_ids, positions, intermediate_tensors=None, inputs_embeds=None, **kwargs):
+    def forward(
+        self, input_ids, positions, intermediate_tensors=None, inputs_embeds=None, **kwargs
+    ):
         hidden_states = super().forward(
-            input_ids=input_ids, positions=positions,
+            input_ids=input_ids,
+            positions=positions,
             intermediate_tensors=intermediate_tensors,
-            inputs_embeds=inputs_embeds, **kwargs,
+            inputs_embeds=inputs_embeds,
+            **kwargs,
         )
         return self.colpali_projection(hidden_states)
 

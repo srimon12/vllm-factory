@@ -121,13 +121,13 @@ class LFM2VLForColPali(Lfm2VLForConditionalGeneration):
         pooler_config = vllm_config.model_config.pooler_config
 
         # Get hidden size from config (LFM2-VL uses text_config.hidden_size)
-        if hasattr(config, 'text_config') and hasattr(config.text_config, 'hidden_size'):
+        if hasattr(config, "text_config") and hasattr(config.text_config, "hidden_size"):
             hidden_size = config.text_config.hidden_size
         else:
-            hidden_size = getattr(config, 'hidden_size', 512)  # LFM2-VL-450M default
+            hidden_size = getattr(config, "hidden_size", 512)  # LFM2-VL-450M default
 
         # Get ColPali dim from config (default 128)
-        colpali_dim = getattr(config, 'dim', 128)
+        colpali_dim = getattr(config, "dim", 128)
 
         # ColLFM2 projection layer
         self.collfm2_projection = ColLFM2Projection(
@@ -143,6 +143,7 @@ class LFM2VLForColPali(Lfm2VLForConditionalGeneration):
         else:
             # Create default pooler config for ALL pooling
             from vllm.config import PoolerConfig
+
             default_pooler_config = PoolerConfig(pooling_type="ALL")
             self.pooler = pooler_for_token_embed(default_pooler_config)
 
@@ -192,7 +193,7 @@ class LFM2VLForColPali(Lfm2VLForConditionalGeneration):
         weights_list = list(weights)
 
         # Debug: check for custom_text_proj weights
-        proj_weights = [(n, w) for n, w in weights_list if 'custom_text_proj' in n]
+        proj_weights = [(n, w) for n, w in weights_list if "custom_text_proj" in n]
         if proj_weights:
             print(f"[LFM2VLForColPali] Found projection weights: {[n for n, _ in proj_weights]}")
 
@@ -201,7 +202,7 @@ class LFM2VLForColPali(Lfm2VLForConditionalGeneration):
         loaded = loader.load_weights(iter(weights_list), mapper=self.hf_to_vllm_mapper)
 
         # Verify projection weights are loaded
-        if hasattr(self, 'collfm2_projection'):
+        if hasattr(self, "collfm2_projection"):
             proj_weight = self.collfm2_projection.linear.weight
             # Convert to float for check (FP8 doesn't support .abs() directly)
             try:

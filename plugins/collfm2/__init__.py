@@ -11,9 +11,9 @@ from .model import LFM2VLForColPali
 
 
 def register() -> None:
-    register_plugin("collfm2", ColLFM2Config,
-                     "LFM2VLForColPali", LFM2VLForColPali,
-                     aliases=["ColLFM2"])
+    register_plugin(
+        "collfm2", ColLFM2Config, "LFM2VLForColPali", LFM2VLForColPali, aliases=["ColLFM2"]
+    )
 
 
 register()

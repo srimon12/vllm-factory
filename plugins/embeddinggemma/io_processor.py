@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
 from vllm.inputs import TokensPrompt
@@ -49,6 +48,7 @@ TASK_PROMPTS = {
 @dataclass
 class EmbeddingGemmaInput:
     """Validated embedding request after parse_request."""
+
     text: str
     task: str = "query"
 
@@ -72,7 +72,9 @@ class EmbeddingGemmaIOProcessor(IOProcessor[EmbeddingGemmaInput, list[float]]):
 
         model_name = vllm_config.model_config.model
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_name, use_fast=True, trust_remote_code=True,
+            model_name,
+            use_fast=True,
+            trust_remote_code=True,
         )
         self.max_length = 2048
 
@@ -85,18 +87,14 @@ class EmbeddingGemmaIOProcessor(IOProcessor[EmbeddingGemmaInput, list[float]]):
             data = request
 
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Expected dict with 'text' key, got {type(data)}"
-            )
+            raise ValueError(f"Expected dict with 'text' key, got {type(data)}")
 
         if "text" not in data:
             raise ValueError("Request data must contain a 'text' key")
 
         task = data.get("task", "query")
         if task not in TASK_PROMPTS:
-            raise ValueError(
-                f"Unknown task '{task}'. Valid tasks: {list(TASK_PROMPTS.keys())}"
-            )
+            raise ValueError(f"Unknown task '{task}'. Valid tasks: {list(TASK_PROMPTS.keys())}")
 
         return EmbeddingGemmaInput(text=data["text"], task=task)
 
@@ -119,7 +117,8 @@ class EmbeddingGemmaIOProcessor(IOProcessor[EmbeddingGemmaInput, list[float]]):
         return TokensPrompt(prompt_token_ids=tokens["input_ids"])
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         if params is not None:
             return params
@@ -147,7 +146,8 @@ class EmbeddingGemmaIOProcessor(IOProcessor[EmbeddingGemmaInput, list[float]]):
             return torch.as_tensor(raw).tolist()
 
     def output_to_response(
-        self, plugin_output: list[float],
+        self,
+        plugin_output: list[float],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

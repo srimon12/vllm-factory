@@ -76,9 +76,7 @@ class BasePooler(nn.Module, ABC):
             offset += length
         return sequences
 
-    def get_pooling_params(
-        self, pooling_metadata: "PoolingMetadata"
-    ) -> list:
+    def get_pooling_params(self, pooling_metadata: "PoolingMetadata") -> list:
         """Extract pooling params list from metadata (v0 and v1 compatible)."""
         if hasattr(pooling_metadata, "pooling_params") and pooling_metadata.pooling_params:
             return list(pooling_metadata.pooling_params)
@@ -122,9 +120,8 @@ class TokenLevelPooler(BasePooler):
         self.normalize = normalize
 
         from vllm.model_executor.layers.linear import ReplicatedLinear
-        self.linear = ReplicatedLinear(
-            hidden_size, output_dim, bias=bias, quant_config=None
-        )
+
+        self.linear = ReplicatedLinear(hidden_size, output_dim, bias=bias, quant_config=None)
 
     def project_and_normalize(self, embeddings: torch.Tensor) -> torch.Tensor:
         """Project to output dim and L2-normalize."""

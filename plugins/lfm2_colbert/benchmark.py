@@ -1,4 +1,5 @@
 """LFM2-ColBERT Throughput Benchmark"""
+
 from __future__ import annotations
 
 import argparse
@@ -50,7 +51,9 @@ async def run_benchmark(
     connector = aiohttp.TCPConnector(limit=concurrency * 2)
     async with aiohttp.ClientSession(connector=connector) as session:
         print(f"  Warming up ({warmup} requests, ~{seq_len} tokens/req)...")
-        await asyncio.gather(*[send_request(session, url, model, texts[i % len(texts)]) for i in range(warmup)])
+        await asyncio.gather(
+            *[send_request(session, url, model, texts[i % len(texts)]) for i in range(warmup)]
+        )
 
         print(f"  Timed run ({num_requests} requests, concurrency={concurrency})...")
         sem = asyncio.Semaphore(concurrency)
@@ -60,7 +63,9 @@ async def run_benchmark(
             async with sem:
                 return await send_request(session, url, model, text)
 
-        latencies = await asyncio.gather(*[bounded(texts[i % len(texts)]) for i in range(num_requests)])
+        latencies = await asyncio.gather(
+            *[bounded(texts[i % len(texts)]) for i in range(num_requests)]
+        )
         elapsed = time.perf_counter() - start
 
     latencies = sorted(latencies)
@@ -83,16 +88,27 @@ def main():
     p.add_argument("--num-requests", type=int, default=500)
     p.add_argument("--concurrency", type=int, default=32)
     p.add_argument("--warmup", type=int, default=200)
-    p.add_argument("--seq-len", type=int, default=128,
-                   help="Approximate input length in tokens (default: 128)")
+    p.add_argument(
+        "--seq-len", type=int, default=128, help="Approximate input length in tokens (default: 128)"
+    )
     args = p.parse_args()
 
-    print(f"\nLFM2-ColBERT Benchmark\n  model: {args.model}\n  requests: {args.num_requests}\n  concurrency: {args.concurrency}\n  seq_len: {args.seq_len}\n")
-    results = asyncio.run(run_benchmark(
-        args.base_url, args.model, args.num_requests,
-        args.concurrency, args.warmup, args.seq_len,
-    ))
-    print(f"  req/s:  {results['req_per_sec']}\n  p50_ms: {results['p50_ms']}\n  p95_ms: {results['p95_ms']}\n  p99_ms: {results['p99_ms']}")
+    print(
+        f"\nLFM2-ColBERT Benchmark\n  model: {args.model}\n  requests: {args.num_requests}\n  concurrency: {args.concurrency}\n  seq_len: {args.seq_len}\n"
+    )
+    results = asyncio.run(
+        run_benchmark(
+            args.base_url,
+            args.model,
+            args.num_requests,
+            args.concurrency,
+            args.warmup,
+            args.seq_len,
+        )
+    )
+    print(
+        f"  req/s:  {results['req_per_sec']}\n  p50_ms: {results['p50_ms']}\n  p95_ms: {results['p95_ms']}\n  p99_ms: {results['p99_ms']}"
+    )
 
 
 if __name__ == "__main__":

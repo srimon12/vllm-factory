@@ -16,13 +16,11 @@ Request format (online POST /pooling):
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import torch
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
 from vllm.inputs.data import PromptType
@@ -34,6 +32,7 @@ from vllm.pooling_params import PoolingParams
 @dataclass
 class NemotronColEmbedInput:
     """Validated embedding request after parse_request."""
+
     text: str | None = None
     image: Any = None
     is_query: bool = True
@@ -58,7 +57,8 @@ class NemotronColEmbedIOProcessor(IOProcessor[NemotronColEmbedInput, list[float]
 
         model_name = vllm_config.model_config.model
         self._processor = AutoProcessor.from_pretrained(
-            model_name, trust_remote_code=True,
+            model_name,
+            trust_remote_code=True,
         )
         self.query_prefix = "query: "
         self.passage_prefix = "passage: "
@@ -72,9 +72,7 @@ class NemotronColEmbedIOProcessor(IOProcessor[NemotronColEmbedInput, list[float]
             data = request
 
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Expected dict with 'text' or 'image' key, got {type(data)}"
-            )
+            raise ValueError(f"Expected dict with 'text' or 'image' key, got {type(data)}")
 
         is_query = bool(data.get("is_query", True))
 
@@ -83,9 +81,7 @@ class NemotronColEmbedIOProcessor(IOProcessor[NemotronColEmbedInput, list[float]
         elif "image" in data:
             return NemotronColEmbedInput(image=data["image"], is_query=is_query)
         else:
-            raise ValueError(
-                "Request data must contain either 'text' or 'image' key"
-            )
+            raise ValueError("Request data must contain either 'text' or 'image' key")
 
     @staticmethod
     def _load_image(source):
@@ -98,11 +94,13 @@ class NemotronColEmbedIOProcessor(IOProcessor[NemotronColEmbedInput, list[float]
             if source.startswith("data:"):
                 import base64
                 from io import BytesIO
+
                 _, b64data = source.split(",", 1)
                 return PILImage.open(BytesIO(base64.b64decode(b64data))).convert("RGB")
             if source.startswith(("http://", "https://")):
                 import urllib.request
                 from io import BytesIO
+
                 with urllib.request.urlopen(source) as resp:
                     return PILImage.open(BytesIO(resp.read())).convert("RGB")
             return PILImage.open(source).convert("RGB")
@@ -117,22 +115,36 @@ class NemotronColEmbedIOProcessor(IOProcessor[NemotronColEmbedInput, list[float]
     ) -> PromptType | Sequence[PromptType]:
         if prompt.text is not None:
             prefixed = f"{self.query_prefix}{prompt.text}"
-            message = [{"role": "user", "content": [
-                {"type": "text", "text": f"Query: {prefixed}"},
-            ]}]
+            message = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"Query: {prefixed}"},
+                    ],
+                }
+            ]
             formatted = self._processor.apply_chat_template(
-                message, tokenize=False, add_generation_prompt=True,
+                message,
+                tokenize=False,
+                add_generation_prompt=True,
             )
             return formatted
 
         image = self._load_image(prompt.image)
         passage_text = f"{self.passage_prefix}"
-        message = [{"role": "user", "content": [
-            {"type": "image"},
-            {"type": "text", "text": passage_text},
-        ]}]
+        message = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": passage_text},
+                ],
+            }
+        ]
         formatted = self._processor.apply_chat_template(
-            message, tokenize=False, add_generation_prompt=True,
+            message,
+            tokenize=False,
+            add_generation_prompt=True,
         )
 
         return {
@@ -141,7 +153,8 @@ class NemotronColEmbedIOProcessor(IOProcessor[NemotronColEmbedInput, list[float]
         }
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         if params is not None:
             if params.task is None:
@@ -171,7 +184,8 @@ class NemotronColEmbedIOProcessor(IOProcessor[NemotronColEmbedInput, list[float]
             return torch.as_tensor(raw).tolist()
 
     def output_to_response(
-        self, plugin_output: list[float],
+        self,
+        plugin_output: list[float],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

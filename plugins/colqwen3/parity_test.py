@@ -32,6 +32,7 @@ def _patch_slow_image_processor():
             image_processing_qwen2_vl,
             image_processing_qwen2_vl_fast,
         )
+
         Slow = image_processing_qwen2_vl.Qwen2VLImageProcessor
         image_processing_qwen2_vl_fast.Qwen2VLImageProcessorFast = Slow
         _mod.Qwen2VLImageProcessorFast = Slow
@@ -48,20 +49,22 @@ from PIL import Image  # noqa: E402
 
 # Preprocessing constants matching sauerkrautlm-colpali exactly
 
-QUERY_PREFIX = 'Query: '
-QUERY_AUG_TOKEN = '<|endoftext|>'
+QUERY_PREFIX = "Query: "
+QUERY_AUG_TOKEN = "<|endoftext|>"
 QUERY_AUG_SUFFIX = QUERY_AUG_TOKEN * 10
-VISUAL_PROMPT_PREFIX = '<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Describe the image.<|im_end|><|endoftext|>'
+VISUAL_PROMPT_PREFIX = "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Describe the image.<|im_end|><|endoftext|>"
 
 
 def _make_test_image(idx: int) -> Image.Image:
     """Reproduce synthetic test image from generate_reference.py."""
     import random
+
     size = (1024, 1400)
     colors = [(245, 245, 245), (240, 248, 255), (255, 248, 240)]
     bg = colors[idx % len(colors)]
     img = Image.new("RGB", size, bg)
     from PIL import ImageDraw
+
     draw = ImageDraw.Draw(img)
     rng2 = random.Random(idx * 1337)
     for _ in range(30):
@@ -132,10 +135,12 @@ def _run_vllm_images(model_path: str, images: list) -> list:
     for img in images:
         if img.mode != "RGB":
             img = img.convert("RGB")
-        inputs.append({
-            "prompt": VISUAL_PROMPT_PREFIX,
-            "multi_modal_data": {"image": img},
-        })
+        inputs.append(
+            {
+                "prompt": VISUAL_PROMPT_PREFIX,
+                "multi_modal_data": {"image": img},
+            }
+        )
 
     outputs = llm.encode(inputs, pooling_task="token_embed")
     embeddings = [torch.as_tensor(o.outputs.data).float() for o in outputs]
@@ -184,9 +189,13 @@ def main():
     p.add_argument("--reference-dir", required=True)
     p.add_argument("--report-dir", default="/tmp/colqwen3_reports")
     p.add_argument("--min-cosine", type=float, default=0.99)
-    p.add_argument("--min-cosine-image", type=float, default=0.985,
-                   help="Image threshold is slightly lower due to bf16/fp16 rounding "
-                        "differences in the vision encoder forward pass.")
+    p.add_argument(
+        "--min-cosine-image",
+        type=float,
+        default=0.985,
+        help="Image threshold is slightly lower due to bf16/fp16 rounding "
+        "differences in the vision encoder forward pass.",
+    )
     args = p.parse_args()
 
     ref = Path(args.reference_dir)

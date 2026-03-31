@@ -17,15 +17,22 @@ import torch
 
 # --- Overlap predicates -------------------------------------------------------
 
-def _has_overlapping(span1: Tuple[int,int,str], span2: Tuple[int,int,str], multi_label: bool) -> bool:
-    s1, e1, l1 = span1; s2, e2, l2 = span2  # noqa: E702
+
+def _has_overlapping(
+    span1: Tuple[int, int, str], span2: Tuple[int, int, str], multi_label: bool
+) -> bool:
+    s1, e1, l1 = span1
+    s2, e2, l2 = span2  # noqa: E702
     if multi_label and l1 == l2:
         return False
     return not (e1 < s2 or s1 > e2)
 
 
-def _has_overlapping_nested(span1: Tuple[int,int,str], span2: Tuple[int,int,str], multi_label: bool) -> bool:
-    s1, e1, l1 = span1; s2, e2, l2 = span2  # noqa: E702
+def _has_overlapping_nested(
+    span1: Tuple[int, int, str], span2: Tuple[int, int, str], multi_label: bool
+) -> bool:
+    s1, e1, l1 = span1
+    s2, e2, l2 = span2  # noqa: E702
     if multi_label and l1 == l2:
         return False
     if s1 == s2 and e1 == e2:
@@ -37,6 +44,7 @@ def _has_overlapping_nested(span1: Tuple[int,int,str], span2: Tuple[int,int,str]
 
 # --- Fast, spec-accurate decoder ---------------------------------------------
 
+
 class GLiNERDecoder:
     """
     Drop-in, faster mirror of GLiNER's SpanDecoder.decode:
@@ -45,7 +53,9 @@ class GLiNERDecoder:
       - tokens: list[list[str]]  (for sequence-length bounds)
       - returns: list[list[(start, end, ent_type, gen_ent_type, score)]]
     """
-    def __init__(self): pass
+
+    def __init__(self):
+        pass
 
     @staticmethod
     def _build_span_label_maps(
@@ -60,34 +70,39 @@ class GLiNERDecoder:
         cursor = 0
         out: List[Dict[int, List[str]]] = [{} for _ in range(B)]
         for b in range(B):
-            valid = (sel_idx[b] != -1)
+            valid = sel_idx[b] != -1
             n = int(valid.sum().item())
             if n == 0:
                 continue
             flat_indices = sel_idx[b, valid].tolist()
             start = cursor * num_gen_sequences
             span_lbls = gen_labels[start : start + n * num_gen_sequences]
-            grouped = [span_lbls[i * num_gen_sequences:(i + 1) * num_gen_sequences] for i in range(n)]
+            grouped = [
+                span_lbls[i * num_gen_sequences : (i + 1) * num_gen_sequences] for i in range(n)
+            ]
             out[b] = dict(zip(flat_indices, grouped))
             cursor += n
         return out
 
     @staticmethod
     def _greedy_nms(
-        spans: List[Tuple[int,int,str,Optional[List[str]],float]],
+        spans: List[Tuple[int, int, str, Optional[List[str]], float]],
         flat_ner: bool,
-        multi_label: bool
-    ) -> List[Tuple[int,int,str,Optional[List[str]],float]]:
+        multi_label: bool,
+    ) -> List[Tuple[int, int, str, Optional[List[str]], float]]:
         """Greedy NMS: sort by score desc, remove overlapping spans."""
-        has_ov = partial(_has_overlapping, multi_label=multi_label) if flat_ner \
-                 else partial(_has_overlapping_nested, multi_label=multi_label)
+        has_ov = (
+            partial(_has_overlapping, multi_label=multi_label)
+            if flat_ner
+            else partial(_has_overlapping_nested, multi_label=multi_label)
+        )
         spans_sorted = sorted(spans, key=lambda x: -x[-1])
         keep = []
         for cand in spans_sorted:
-            s,e,lab,genlab,score = cand
+            s, e, lab, genlab, score = cand
             clash = False
             for k in keep:
-                if has_ov((s,e,lab), (k[0],k[1],k[2])):
+                if has_ov((s, e, lab), (k[0], k[1], k[2])):
                     clash = True
                     break
             if not clash:
@@ -98,15 +113,15 @@ class GLiNERDecoder:
     def decode(
         self,
         tokens: List[List[str]],
-        id_to_classes: Union[Dict[int,str], List[Dict[int,str]]],
-        logits: torch.Tensor,              # (B,L,K,C) raw logits
+        id_to_classes: Union[Dict[int, str], List[Dict[int, str]]],
+        logits: torch.Tensor,  # (B,L,K,C) raw logits
         flat_ner: bool = False,
         threshold: float = 0.5,
         multi_label: bool = False,
         sel_idx: Optional[torch.Tensor] = None,
         gen_labels: Optional[List[str]] = None,
         num_gen_sequences: int = 1,
-    ) -> List[List[Tuple[int,int,str,Optional[List[str]],float]]]:
+    ) -> List[List[Tuple[int, int, str, Optional[List[str]], float]]]:
 
         B, L, K, C = logits.shape
         device = logits.device
@@ -125,7 +140,12 @@ class GLiNERDecoder:
             return [[] for _ in range(B)]
 
         b_idx, s_idx, k_idx, c_idx, scores, end_exclusive = (
-            b_idx[valid], s_idx[valid], k_idx[valid], c_idx[valid], scores[valid], end_exclusive[valid]
+            b_idx[valid],
+            s_idx[valid],
+            k_idx[valid],
+            c_idx[valid],
+            scores[valid],
+            end_exclusive[valid],
         )
         end_inclusive = end_exclusive - 1
         flat_idx = s_idx * K + k_idx
@@ -139,13 +159,13 @@ class GLiNERDecoder:
         f_cpu = flat_idx.tolist()
 
         # Pre-bucket candidates by batch index
-        batched_candidates: List[List[Tuple[int,int,int,float,int]]] = [[] for _ in range(B)]
+        batched_candidates: List[List[Tuple[int, int, int, float, int]]] = [[] for _ in range(B)]
         for s, e, c, sc, f, b in zip(s_cpu, e_cpu, c_cpu, sc_cpu, f_cpu, b_cpu):
             batched_candidates[b].append((s, e, c, sc, f))
 
         span_label_maps = self._build_span_label_maps(sel_idx, gen_labels, num_gen_sequences)
 
-        out: List[List[Tuple[int,int,str,Optional[List[str]],float]]] = [[] for _ in range(B)]
+        out: List[List[Tuple[int, int, str, Optional[List[str]], float]]] = [[] for _ in range(B)]
         for i in range(B):
             candidates_i = batched_candidates[i]
             if not candidates_i:
@@ -170,11 +190,7 @@ class GLiNERDecoder:
         return out
 
 
-def get_final_entities(
-    decoded_outputs: list,
-    word_positions: list,
-    original_texts: list
-) -> list:
+def get_final_entities(decoded_outputs: list, word_positions: list, original_texts: list) -> list:
     """
     Convert token-based entity indices into character-based indices.
     Mirrors GLiNER.run() method's final post-processing step.
@@ -183,12 +199,8 @@ def get_final_entities(
     all_end_token_idx_to_text_idx = []
 
     for batch_item_positions in word_positions:
-        all_start_token_idx_to_text_idx.append(
-            [pos[0] for pos in batch_item_positions]
-        )
-        all_end_token_idx_to_text_idx.append(
-            [pos[1] for pos in batch_item_positions]
-        )
+        all_start_token_idx_to_text_idx.append([pos[0] for pos in batch_item_positions])
+        all_end_token_idx_to_text_idx.append([pos[1] for pos in batch_item_positions])
 
     all_entities = []
     for i, output in enumerate(decoded_outputs):
@@ -210,7 +222,7 @@ def get_final_entities(
                 "score": ent_score,
             }
             if gen_ent_type is not None:
-                ent_details['generated labels'] = gen_ent_type
+                ent_details["generated labels"] = gen_ent_type
             entities.append(ent_details)
 
         all_entities.append(entities)

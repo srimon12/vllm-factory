@@ -39,9 +39,13 @@ def _patch_encoder_only_kv_cache_spec() -> None:
 
 def register() -> None:
     _patch_encoder_only_kv_cache_spec()
-    register_plugin("qwen3_vl_nemotron_embed", NemotronColEmbedConfig,
-                     "NemotronColEmbedModel", NemotronColEmbedModel,
-                     aliases=["Qwen3VLNemotronEmbedModel"])
+    register_plugin(
+        "qwen3_vl_nemotron_embed",
+        NemotronColEmbedConfig,
+        "NemotronColEmbedModel",
+        NemotronColEmbedModel,
+        aliases=["Qwen3VLNemotronEmbedModel"],
+    )
 
 
 register()

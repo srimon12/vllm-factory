@@ -75,7 +75,9 @@ class EmbeddingGemmaProcessor:
         self.max_length = max_length
 
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_path, use_fast=True, trust_remote_code=trust_remote_code,
+            model_path,
+            use_fast=True,
+            trust_remote_code=trust_remote_code,
         )
 
         self._llm = LLM(
@@ -109,9 +111,7 @@ class EmbeddingGemmaProcessor:
             return None
         return torch.as_tensor(outputs[0].outputs.embedding).float()
 
-    def run_batch(
-        self, texts: List[str], task: str = "query"
-    ) -> List[Optional[torch.Tensor]]:
+    def run_batch(self, texts: List[str], task: str = "query") -> List[Optional[torch.Tensor]]:
         """Embed a batch of texts. Returns list of (dim,) tensors."""
         if not texts:
             return []
@@ -120,9 +120,7 @@ class EmbeddingGemmaProcessor:
         results: List[Optional[torch.Tensor]] = []
         for out in outputs:
             if out is not None and out.outputs is not None:
-                results.append(
-                    torch.as_tensor(out.outputs.embedding).float()
-                )
+                results.append(torch.as_tensor(out.outputs.embedding).float())
             else:
                 results.append(None)
         return results

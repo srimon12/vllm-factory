@@ -26,7 +26,9 @@ class LFM2ForColBERT(nn.Module, HasInnerState, IsHybrid):
     is_hybrid = True
 
     @classmethod
-    def get_mamba_state_dtype_from_config(cls, vllm_config: "VllmConfig") -> tuple[torch.dtype, ...]:
+    def get_mamba_state_dtype_from_config(
+        cls, vllm_config: "VllmConfig"
+    ) -> tuple[torch.dtype, ...]:
         return Lfm2ForCausalLM.get_mamba_state_dtype_from_config(vllm_config)
 
     @classmethod
@@ -82,7 +84,7 @@ class LFM2ForColBERT(nn.Module, HasInnerState, IsHybrid):
                 weight_path = hf_hub_download(
                     repo_id=self._model_name_or_path,
                     filename="1_Dense/model.safetensors",
-                    local_files_only=os.environ.get("HF_HUB_OFFLINE", "0") == "1"
+                    local_files_only=os.environ.get("HF_HUB_OFFLINE", "0") == "1",
                 )
 
             with safetensors.torch.safe_open(weight_path, framework="pt", device="cpu") as f:
@@ -104,6 +106,7 @@ class LFM2ForColBERT(nn.Module, HasInnerState, IsHybrid):
     def sample(self, logits: torch.Tensor, sampling_metadata):
         try:
             from vllm.sequence import SamplerOutput
+
             return SamplerOutput(outputs=[])
         except ImportError:
             return None
@@ -156,8 +159,13 @@ class LFM2ForColBERT(nn.Module, HasInnerState, IsHybrid):
         # Prepare an iterator that we can peek at or process
         for name, loaded_weight in weights:
             # Check if this is the colbert head projection
-            if "linear.weight" in name and loaded_weight.shape[0] == self.colbert_linear.output_size:
-                print(f"LFM2ForColBERT: Loading colbert_linear from {name} shape {loaded_weight.shape}")
+            if (
+                "linear.weight" in name
+                and loaded_weight.shape[0] == self.colbert_linear.output_size
+            ):
+                print(
+                    f"LFM2ForColBERT: Loading colbert_linear from {name} shape {loaded_weight.shape}"
+                )
                 weight = loaded_weight.to(self.colbert_linear.weight.dtype)
                 self.colbert_linear.weight.data.copy_(weight)
                 self._projection_loaded = True

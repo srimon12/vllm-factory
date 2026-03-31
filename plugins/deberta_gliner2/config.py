@@ -9,6 +9,7 @@ class GLiNER2Config(PretrainedConfig):
     Stores both vLLM-facing params (num_hidden_layers=0 for no KV cache)
     and the full DeBERTa v3 encoder + GLiNER2 head parameters.
     """
+
     model_type = "gliner2"
 
     def __init__(

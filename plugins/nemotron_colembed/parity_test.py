@@ -39,6 +39,7 @@ IMAGE_URLS = [
 # Phase 1: HF reference embeddings
 # ======================================================================
 
+
 def phase_prepare():
     from transformers import AutoModel
     from transformers.image_utils import load_image
@@ -71,13 +72,16 @@ def phase_prepare():
     print(f"\nReference scores:\n{scores}")
 
     # Save reference
-    torch.save({
-        "query_embeddings": query_embs.cpu(),
-        "image_embeddings": image_embs.cpu(),
-        "scores": scores.cpu(),
-        "queries": QUERIES,
-        "image_urls": IMAGE_URLS,
-    }, REF_FILE)
+    torch.save(
+        {
+            "query_embeddings": query_embs.cpu(),
+            "image_embeddings": image_embs.cpu(),
+            "scores": scores.cpu(),
+            "queries": QUERIES,
+            "image_urls": IMAGE_URLS,
+        },
+        REF_FILE,
+    )
     print(f"\nSaved to {REF_FILE}")
     print("✅ Phase 1 complete\n")
 
@@ -85,6 +89,7 @@ def phase_prepare():
 # ======================================================================
 # Phase 2: vLLM inference + cosine similarity comparison
 # ======================================================================
+
 
 def phase_test():
     from transformers.image_utils import load_image
@@ -122,6 +127,7 @@ def phase_test():
     # 2. Wrap: "Query: {prefixed}" inside a chat template
     # 3. Apply chat_template with add_generation_prompt=True
     from transformers import AutoProcessor
+
     proc = AutoProcessor.from_pretrained(MODEL, trust_remote_code=True)
     formatted_queries = []
     for q in QUERIES:
@@ -156,7 +162,7 @@ def phase_test():
         ref_valid = ref_emb[ref_mask].float()
 
         # Truncate vLLM to same length if needed
-        vllm_valid = vllm_emb[:len(ref_valid)]
+        vllm_valid = vllm_emb[: len(ref_valid)]
 
         if len(vllm_valid) > 0 and len(ref_valid) > 0:
             min_len = min(len(vllm_valid), len(ref_valid))
@@ -169,8 +175,10 @@ def phase_test():
         else:
             sim = 0.0
         query_sims.append(sim)
-        print(f"  Query {i}: cos_sim = {sim:.6f}, "
-              f"vllm_tokens={len(vllm_emb)}, ref_tokens={len(ref_valid)}")
+        print(
+            f"  Query {i}: cos_sim = {sim:.6f}, "
+            f"vllm_tokens={len(vllm_emb)}, ref_tokens={len(ref_valid)}"
+        )
 
     avg_query_sim = sum(query_sims) / len(query_sims) if query_sims else 0
 
@@ -190,15 +198,22 @@ def phase_test():
             img = img.convert("RGB")
         # Replicate process_documents formatting
         passage_text = "passage: "  # passage_prefix + " " + "" (empty text)
-        message = [{"role": "user", "content": [
-            {"type": "image"},
-            {"type": "text", "text": passage_text},
-        ]}]
+        message = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": passage_text},
+                ],
+            }
+        ]
         prompt = proc.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
-        image_inputs.append({
-            "prompt": prompt,
-            "multi_modal_data": {"image": img},
-        })
+        image_inputs.append(
+            {
+                "prompt": prompt,
+                "multi_modal_data": {"image": img},
+            }
+        )
     print(f"  Image prompt 0: {repr(image_inputs[0]['prompt'][:80])}...")
 
     t0 = time.perf_counter()
@@ -216,7 +231,7 @@ def phase_test():
         ref_norms = ref_emb.norm(dim=-1)
         ref_mask = ref_norms > 0
         ref_valid = ref_emb[ref_mask].float()
-        vllm_valid = vllm_emb[:len(ref_valid)]
+        vllm_valid = vllm_emb[: len(ref_valid)]
 
         if len(vllm_valid) > 0 and len(ref_valid) > 0:
             min_len = min(len(vllm_valid), len(ref_valid))
@@ -228,8 +243,10 @@ def phase_test():
         else:
             sim = 0.0
         image_sims.append(sim)
-        print(f"  Image {i}: cos_sim = {sim:.6f}, "
-              f"vllm_tokens={len(vllm_emb)}, ref_tokens={len(ref_valid)}")
+        print(
+            f"  Image {i}: cos_sim = {sim:.6f}, "
+            f"vllm_tokens={len(vllm_emb)}, ref_tokens={len(ref_valid)}"
+        )
 
     avg_image_sim = sum(image_sims) / len(image_sims) if image_sims else 0
 

@@ -38,9 +38,7 @@ _ENCODER_PATH = Path(__file__).resolve().parents[2] / "models" / "deberta" / "de
 
 
 def _import_deberta_encoder():
-    spec = importlib.util.spec_from_file_location(
-        "deberta_encoder", str(_ENCODER_PATH)
-    )
+    spec = importlib.util.spec_from_file_location("deberta_encoder", str(_ENCODER_PATH))
     mod = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("deberta_encoder", mod)
     spec.loader.exec_module(mod)
@@ -116,16 +114,16 @@ class GLiNERLinkerModel(nn.Module):
 
         logger.info(
             "Initialized full pipeline: hidden=%d, layers=%d",
-            H, cfg.encoder_num_hidden_layers,
+            H,
+            cfg.encoder_num_hidden_layers,
         )
 
         # Pooler — word extraction + scoring (no LSTM on inference path)
         from .pooler import GLiNERLinkerPooler
+
         self.pooler = GLiNERLinkerPooler(self)
 
-    def embed_input_ids(
-        self, input_ids: torch.Tensor, **kwargs
-    ) -> torch.Tensor:
+    def embed_input_ids(self, input_ids: torch.Tensor, **kwargs) -> torch.Tensor:
         """Required by vLLM's pooling runner to embed token IDs."""
         return self.text_encoder.embeddings.word_embeddings(input_ids)
 
@@ -133,6 +131,7 @@ class GLiNERLinkerModel(nn.Module):
         """Override sampling for pooling models — return empty outputs."""
         try:
             from vllm.sequence import SamplerOutput
+
             return SamplerOutput(outputs=[])
         except ImportError:
             return None
@@ -158,7 +157,9 @@ class GLiNERLinkerModel(nn.Module):
                     attn_seqs: list[Optional[torch.Tensor]] = []
                     for i in range(len(boundaries)):
                         start = boundaries[i].item()
-                        end = boundaries[i + 1].item() if i + 1 < len(boundaries) else len(input_ids)
+                        end = (
+                            boundaries[i + 1].item() if i + 1 < len(boundaries) else len(input_ids)
+                        )
                         seqs.append(input_ids[start:end])
                         if attn_flat is not None:
                             if attn_flat.shape[0] != input_ids.shape[0]:
@@ -173,12 +174,15 @@ class GLiNERLinkerModel(nn.Module):
                     max_len = max(s.size(0) for s in seqs)
                     pad_id = self.config.encoder_pad_token_id
                     batched_ids = torch.full(
-                        (len(seqs), max_len), pad_id,
-                        dtype=input_ids.dtype, device=input_ids.device,
+                        (len(seqs), max_len),
+                        pad_id,
+                        dtype=input_ids.dtype,
+                        device=input_ids.device,
                     )
                     attn_mask = torch.zeros(
                         (len(seqs), max_len),
-                        dtype=torch.long, device=input_ids.device,
+                        dtype=torch.long,
+                        device=input_ids.device,
                     )
                     seq_lens = []
                     for i, s in enumerate(seqs):
@@ -261,19 +265,19 @@ class GLiNERLinkerModel(nn.Module):
 
         for hf_name, tensor in weights:
             if hf_name.startswith(text_prefix):
-                key = hf_name[len(text_prefix):]
+                key = hf_name[len(text_prefix) :]
                 text_weights.append(("deberta." + key, tensor))
 
             elif hf_name.startswith(labels_prefix):
-                key = hf_name[len(labels_prefix):]
+                key = hf_name[len(labels_prefix) :]
                 labels_weights.append(("deberta." + key, tensor))
 
             elif hf_name.startswith("rnn.lstm."):
-                key = hf_name[len("rnn.lstm."):]
+                key = hf_name[len("rnn.lstm.") :]
                 rnn_state[key] = tensor
 
             elif hf_name.startswith("scorer."):
-                key = hf_name[len("scorer."):]
+                key = hf_name[len("scorer.") :]
                 scorer_state[key] = tensor
 
         # Load text encoder via custom encoder's load_weights
@@ -294,11 +298,11 @@ class GLiNERLinkerModel(nn.Module):
             loaded = 0
             for key, tensor in scorer_state.items():
                 if key.startswith("proj_token."):
-                    attr_key = key[len("proj_token."):]
+                    attr_key = key[len("proj_token.") :]
                     getattr(self.scorer_proj_token, attr_key).data.copy_(tensor)
                     loaded += 1
                 elif key.startswith("proj_label."):
-                    attr_key = key[len("proj_label."):]
+                    attr_key = key[len("proj_label.") :]
                     getattr(self.scorer_proj_label, attr_key).data.copy_(tensor)
                     loaded += 1
                 elif key.startswith("out_mlp."):

@@ -55,23 +55,35 @@ def main():
     env.setdefault("TOKENIZERS_PARALLELISM", "false")
 
     cmd = [
-        sys.executable, "-m", "vllm.entrypoints.openai.api_server",
-        "--model", args.model,
-        "--runner", "pooling",
+        sys.executable,
+        "-m",
+        "vllm.entrypoints.openai.api_server",
+        "--model",
+        args.model,
+        "--runner",
+        "pooling",
         "--trust-remote-code",
-        "--host", args.host,
-        "--port", str(args.port),
-        "--dtype", args.dtype,
+        "--host",
+        args.host,
+        "--port",
+        str(args.port),
+        "--dtype",
+        args.dtype,
         "--enforce-eager",
         "--no-enable-prefix-caching",
         "--no-enable-chunked-prefill",
-        "--gpu-memory-utilization", str(args.gpu_memory_utilization),
-        "--max-model-len", str(args.max_model_len),
+        "--gpu-memory-utilization",
+        str(args.gpu_memory_utilization),
+        "--max-model-len",
+        str(args.max_model_len),
         # Critical: limit profiling batch to max_model_len to avoid OOM
         # from the seq_len x seq_len attention mask allocation during warmup
-        "--max-num-batched-tokens", str(args.max_model_len),
-        "--max-num-seqs", str(args.max_num_seqs),
-        "--uvicorn-log-level", "warning",
+        "--max-num-batched-tokens",
+        str(args.max_model_len),
+        "--max-num-seqs",
+        str(args.max_num_seqs),
+        "--uvicorn-log-level",
+        "warning",
     ]
 
     print()

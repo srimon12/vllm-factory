@@ -59,6 +59,7 @@ class NemotronColEmbedModel(Qwen3VLForConditionalGeneration):
         # the residual. SkipNorm mimics the RMSNorm interface but only adds residual.
         class SkipNorm(nn.Module):
             """Drop-in replacement for vLLM RMSNorm that skips normalization."""
+
             def forward(self, x, residual=None):
                 if residual is not None:
                     return x + residual, residual
@@ -67,9 +68,7 @@ class NemotronColEmbedModel(Qwen3VLForConditionalGeneration):
         self.language_model.model.norm = SkipNorm()
 
         config = vllm_config.model_config.hf_config
-        hidden_size = getattr(
-            getattr(config, "text_config", config), "hidden_size", 2560
-        )
+        hidden_size = getattr(getattr(config, "text_config", config), "hidden_size", 2560)
 
         # Pooler for token-level embeddings (ALL tokens)
         pooler_config = vllm_config.model_config.pooler_config
@@ -77,10 +76,13 @@ class NemotronColEmbedModel(Qwen3VLForConditionalGeneration):
             self.pooler = pooler_for_token_embed(pooler_config)
         else:
             from vllm.config import PoolerConfig
+
             self.pooler = pooler_for_token_embed(PoolerConfig(pooling_type="ALL"))
 
-        print(f"[NemotronColEmbed] Initialized: hidden_size={hidden_size}, "
-              f"pooling=ALL, no projection, skip final norm, L2 norm on output")
+        print(
+            f"[NemotronColEmbed] Initialized: hidden_size={hidden_size}, "
+            f"pooling=ALL, no projection, skip final norm, L2 norm on output"
+        )
 
     def forward(
         self,

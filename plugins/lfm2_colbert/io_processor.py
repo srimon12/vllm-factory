@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
 from vllm.inputs import TokensPrompt
@@ -32,6 +31,7 @@ from vllm.pooling_params import PoolingParams
 @dataclass
 class LFM2ColBERTInput:
     """Validated embedding request after parse_request."""
+
     text: str
 
 
@@ -54,7 +54,8 @@ class LFM2ColBERTIOProcessor(IOProcessor[LFM2ColBERTInput, list[float]]):
 
         model_name = vllm_config.model_config.model
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_name, trust_remote_code=True,
+            model_name,
+            trust_remote_code=True,
         )
 
     def parse_request(self, request: Any) -> LFM2ColBERTInput:
@@ -66,9 +67,7 @@ class LFM2ColBERTIOProcessor(IOProcessor[LFM2ColBERTInput, list[float]]):
             data = request
 
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Expected dict with 'text' key, got {type(data)}"
-            )
+            raise ValueError(f"Expected dict with 'text' key, got {type(data)}")
 
         if "text" not in data:
             raise ValueError("Request data must contain a 'text' key")
@@ -91,7 +90,8 @@ class LFM2ColBERTIOProcessor(IOProcessor[LFM2ColBERTInput, list[float]]):
         return TokensPrompt(prompt_token_ids=tokens["input_ids"])
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         if params is not None:
             if params.task is None:
@@ -121,7 +121,8 @@ class LFM2ColBERTIOProcessor(IOProcessor[LFM2ColBERTInput, list[float]]):
             return torch.as_tensor(raw).tolist()
 
     def output_to_response(
-        self, plugin_output: list[float],
+        self,
+        plugin_output: list[float],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

@@ -7,8 +7,7 @@ from .model import GLiNER2VLLMModel
 
 
 def register() -> None:
-    register_plugin("gliner2", GLiNER2Config,
-                     "GLiNER2VLLMModel", GLiNER2VLLMModel)
+    register_plugin("gliner2", GLiNER2Config, "GLiNER2VLLMModel", GLiNER2VLLMModel)
 
 
 register()

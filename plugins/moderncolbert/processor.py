@@ -35,8 +35,8 @@ class ModernColBERTProcessor(BaseProcessor):
     """
 
     # ModernBERT ColBERT special tokens
-    QUERY_PREFIX_ID = 50368   # [Q] with trailing space
-    DOC_PREFIX_ID = 50369     # [D] with trailing space
+    QUERY_PREFIX_ID = 50368  # [Q] with trailing space
+    DOC_PREFIX_ID = 50369  # [D] with trailing space
 
     def __init__(
         self,
@@ -49,7 +49,9 @@ class ModernColBERTProcessor(BaseProcessor):
         self.query_max_length = query_max_length
         self.document_max_length = document_max_length
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_path, use_fast=True, trust_remote_code=True,
+            model_path,
+            use_fast=True,
+            trust_remote_code=True,
         )
 
     def engine_kwargs(self) -> dict:
@@ -61,8 +63,12 @@ class ModernColBERTProcessor(BaseProcessor):
         prefix_id = self.QUERY_PREFIX_ID if is_query else self.DOC_PREFIX_ID
 
         tokens = self._tokenizer(
-            text, add_special_tokens=True, truncation=True,
-            max_length=max_len - 1, padding=False, return_tensors=None,
+            text,
+            add_special_tokens=True,
+            truncation=True,
+            max_length=max_len - 1,
+            padding=False,
+            return_tensors=None,
         )
         input_ids = [tokens["input_ids"][0], prefix_id] + tokens["input_ids"][1:]
         attention_mask = [1, 1] + tokens["attention_mask"][1:]
@@ -80,7 +86,9 @@ class ModernColBERTProcessor(BaseProcessor):
             metadata={"is_query": is_query, "text": text},
         )
 
-    def postprocess(self, raw_output: Any, metadata: Optional[Dict] = None) -> Optional[torch.Tensor]:
+    def postprocess(
+        self, raw_output: Any, metadata: Optional[Dict] = None
+    ) -> Optional[torch.Tensor]:
         if raw_output is None:
             return None
         return torch.as_tensor(raw_output)

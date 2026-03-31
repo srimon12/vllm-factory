@@ -24,26 +24,27 @@ class GLiNERPreprocessor:
     Supports batched preprocessing with vectorized operations for
     word masks, span indices, and span masks.
     """
+
     def __init__(
         self,
         underlying_tokenizer: PreTrainedTokenizer,
         config: Any,
         device: Optional[str] = "cpu",
-        include_attention_mask: bool = False
+        include_attention_mask: bool = False,
     ):
         self.tokenizer = underlying_tokenizer
-        self.max_len = getattr(config, 'max_len', 1024)
-        self.max_width = getattr(config, 'max_width', 12)
-        self.ent_token = getattr(config, 'ent_token', "<<ENT>>")
-        self.sep_token = getattr(config, 'sep_token', "<<SEP>>")
+        self.max_len = getattr(config, "max_len", 1024)
+        self.max_width = getattr(config, "max_width", 12)
+        self.ent_token = getattr(config, "ent_token", "<<ENT>>")
+        self.sep_token = getattr(config, "sep_token", "<<SEP>>")
         self.device = device
         self.include_attention_mask = include_attention_mask
 
         # Exact original regex pattern from GLiNER
-        self.word_pattern = re.compile(r'\w+(?:[-_]\w+)*|\S')
+        self.word_pattern = re.compile(r"\w+(?:[-_]\w+)*|\S")
 
         if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token or '[PAD]'
+            self.tokenizer.pad_token = self.tokenizer.eos_token or "[PAD]"
 
     def _split_text_into_words(self, text: str) -> List[Tuple[str, int, int]]:
         """Splits text into words with their start and end character positions."""
@@ -73,8 +74,7 @@ class GLiNERPreprocessor:
         span_starts_b = span_starts.unsqueeze(0)
         span_ends_b = span_ends.unsqueeze(0)
 
-        span_mask = (span_starts_b < seq_lengths_tensor) & \
-                    (span_ends_b < seq_lengths_tensor)
+        span_mask = (span_starts_b < seq_lengths_tensor) & (span_ends_b < seq_lengths_tensor)
 
         span_masks_batch = span_mask.view(B, -1)
 
@@ -82,10 +82,7 @@ class GLiNERPreprocessor:
 
     @torch.no_grad()
     def _create_word_masks_vectorized(
-        self,
-        tokenized_inputs: Any,
-        prompt_lengths: List[int],
-        device: str
+        self, tokenized_inputs: Any, prompt_lengths: List[int], device: str
     ) -> torch.Tensor:
         """Vectorized generation of word-level masks from tokenizer.word_ids()."""
         word_masks = []
@@ -93,16 +90,14 @@ class GLiNERPreprocessor:
             word_ids_list = tokenized_inputs.word_ids(batch_index=i)
 
             word_ids = torch.tensor(
-                [w if w is not None else -1 for w in word_ids_list],
-                device=device,
-                dtype=torch.long
+                [w if w is not None else -1 for w in word_ids_list], device=device, dtype=torch.long
             )
 
             prev_word_ids = torch.roll(word_ids, 1, dims=0)
             prev_word_ids[0] = -1
 
             is_new_word = (word_ids != -1) & (word_ids != prev_word_ids)
-            is_in_text = (word_ids >= prompt_len)
+            is_in_text = word_ids >= prompt_len
             valid_indices = is_new_word & is_in_text
 
             word_mask = torch.zeros_like(word_ids)
@@ -112,7 +107,9 @@ class GLiNERPreprocessor:
 
         return torch.stack(word_masks, dim=0)
 
-    def __call__(self, texts: Union[str, List[str]], labels: List[str], device: Optional[str] = None) -> Dict[str, Any]:
+    def __call__(
+        self, texts: Union[str, List[str]], labels: List[str], device: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Preprocess raw text into model inputs and postprocessing metadata."""
         if not labels:
             raise ValueError("The `labels` list cannot be empty.")
@@ -131,8 +128,8 @@ class GLiNERPreprocessor:
 
         for text in texts_to_process:
             words_with_pos = self._split_text_into_words(text)
-            words = [w[0] for w in words_with_pos][:self.max_len]
-            positions = [(w[1], w[2]) for w in words_with_pos][:self.max_len]
+            words = [w[0] for w in words_with_pos][: self.max_len]
+            positions = [(w[1], w[2]) for w in words_with_pos][: self.max_len]
 
             all_words.append(words)
             all_word_positions.append(positions)
@@ -145,9 +142,9 @@ class GLiNERPreprocessor:
         tokenized_inputs = self.tokenizer(
             input_prompts,
             is_split_into_words=True,
-            return_tensors='pt',
+            return_tensors="pt",
             truncation=True,
-            padding='longest'
+            padding="longest",
         )
 
         # 3. Create word-level masks
@@ -163,15 +160,17 @@ class GLiNERPreprocessor:
 
         # 5. Assemble model inputs
         model_inputs = {
-            'input_ids': tokenized_inputs['input_ids'].to(target_device),
-            'words_mask': words_mask_tensor,
-            'span_idx': span_indices_tensor,
-            'span_mask': span_masks_tensor,
-            'text_lengths': torch.as_tensor(seq_lengths, dtype=torch.long, device=target_device).unsqueeze(-1),
+            "input_ids": tokenized_inputs["input_ids"].to(target_device),
+            "words_mask": words_mask_tensor,
+            "span_idx": span_indices_tensor,
+            "span_mask": span_masks_tensor,
+            "text_lengths": torch.as_tensor(
+                seq_lengths, dtype=torch.long, device=target_device
+            ).unsqueeze(-1),
         }
 
         if self.include_attention_mask:
-            model_inputs['attention_mask'] = tokenized_inputs['attention_mask'].to(target_device)
+            model_inputs["attention_mask"] = tokenized_inputs["attention_mask"].to(target_device)
 
         postprocessing_metadata = {
             "tokens": all_words,
@@ -181,7 +180,4 @@ class GLiNERPreprocessor:
             "entities": [[] for _ in texts_to_process],
         }
 
-        return {
-            "model_inputs": model_inputs,
-            "postprocessing_metadata": postprocessing_metadata
-        }
+        return {"model_inputs": model_inputs, "postprocessing_metadata": postprocessing_metadata}

@@ -37,14 +37,14 @@ def map_weight_name(
     if prefix_mapping:
         for old, new in prefix_mapping.items():
             if name.startswith(old):
-                name = new + name[len(old):]
+                name = new + name[len(old) :]
                 return name
 
     # Strip prefixes
     if strip_prefixes:
         for prefix in strip_prefixes:
             if name.startswith(prefix):
-                name = name[len(prefix):]
+                name = name[len(prefix) :]
                 break
 
     # Add prefix

@@ -36,7 +36,9 @@ def test_multi_text_tokenize_variable_length_and_masks_aligned():
         L = len(x["input_ids"])
         assert len(x["attention_mask"]) == L, f"row {i} attention_mask vs input_ids"
         assert len(x["words_mask"]) == L, f"row {i} words_mask vs input_ids"
-        assert int(x["attention_mask"].sum()) == L, f"row {i}: expect dense mask (no pad tokens in processor path)"
+        assert int(x["attention_mask"].sum()) == L, (
+            f"row {i}: expect dense mask (no pad tokens in processor path)"
+        )
         assert x["text_lengths"] == len(x["words"])
 
 

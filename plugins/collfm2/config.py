@@ -28,6 +28,7 @@ class ColLFM2Config(Lfm2VlConfig):
     When initialized with a minimal config (missing text_config/vision_config),
     automatically fetches the full config from the base model and merges it.
     """
+
     model_type = "collfm2"
 
     # Fields that must be inherited from base model if missing
@@ -62,8 +63,10 @@ class ColLFM2Config(Lfm2VlConfig):
     ):
         # Check if we need to fetch base config (missing critical nested configs)
         needs_base_config = (
-            "text_config" not in kwargs or kwargs.get("text_config") is None or
-            "vision_config" not in kwargs or kwargs.get("vision_config") is None
+            "text_config" not in kwargs
+            or kwargs.get("text_config") is None
+            or "vision_config" not in kwargs
+            or kwargs.get("vision_config") is None
         )
 
         if needs_base_config:
@@ -90,10 +93,10 @@ class ColLFM2Config(Lfm2VlConfig):
         """Fetch configuration from base model (cached)."""
         if base_model not in _BASE_CONFIG_CACHE:
             from transformers import AutoConfig
+
             print(f"[ColLFM2Config] Fetching base config from {base_model}...")
             _BASE_CONFIG_CACHE[base_model] = AutoConfig.from_pretrained(
-                base_model,
-                trust_remote_code=True
+                base_model, trust_remote_code=True
             )
         return _BASE_CONFIG_CACHE[base_model]
 
@@ -114,7 +117,7 @@ class ColLFM2Config(Lfm2VlConfig):
                 if hasattr(base_config, field):
                     value = getattr(base_config, field)
                     # For nested configs (text_config, vision_config), convert to dict
-                    if hasattr(value, 'to_dict'):
+                    if hasattr(value, "to_dict"):
                         merged[field] = value.to_dict()
                     else:
                         merged[field] = value

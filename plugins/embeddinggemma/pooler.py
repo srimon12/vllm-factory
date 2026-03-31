@@ -32,6 +32,7 @@ class EmbeddingGemmaPooler(nn.Module):
     def get_pooling_updates(self, task=None):
         try:
             from vllm.model_executor.layers.pooler import PoolingParamsUpdate
+
             return PoolingParamsUpdate()
         except ImportError:
             return None
@@ -56,7 +57,7 @@ class EmbeddingGemmaPooler(nn.Module):
         outputs = []
         offset = 0
         for seq_len in prompt_lens:
-            seq_hidden = hidden_states[offset:offset + seq_len]  # (seq_len, hidden)
+            seq_hidden = hidden_states[offset : offset + seq_len]  # (seq_len, hidden)
 
             # MEAN pool (matching SentenceTransformers 1_Pooling behavior)
             pooled = seq_hidden.mean(dim=0, keepdim=True)  # (1, hidden)

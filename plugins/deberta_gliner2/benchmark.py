@@ -23,8 +23,11 @@ import aiohttp
 
 SCHEMA = {
     "employee": {
-        "name": "text", "title": "text", "company": "text",
-        "location": "text", "email": "text",
+        "name": "text",
+        "title": "text",
+        "company": "text",
+        "location": "text",
+        "email": "text",
     }
 }
 
@@ -81,8 +84,7 @@ async def run_benchmark(
     async with aiohttp.ClientSession(connector=connector) as session:
         print(f"  Warming up ({warmup} requests, ~{seq_len} tokens/req)...")
         warmup_tasks = [
-            send_request(session, url, model, texts[i % len(texts)])
-            for i in range(warmup)
+            send_request(session, url, model, texts[i % len(texts)]) for i in range(warmup)
         ]
         await asyncio.gather(*warmup_tasks)
 
@@ -94,9 +96,9 @@ async def run_benchmark(
             async with semaphore:
                 return await send_request(session, url, model, text)
 
-        latencies = await asyncio.gather(*[
-            bounded(texts[i % len(texts)]) for i in range(num_requests)
-        ])
+        latencies = await asyncio.gather(
+            *[bounded(texts[i % len(texts)]) for i in range(num_requests)]
+        )
         elapsed = time.perf_counter() - start
 
     latencies = sorted(latencies)
@@ -121,16 +123,25 @@ def main():
     parser.add_argument("--num-requests", type=int, default=500)
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--warmup", type=int, default=200)
-    parser.add_argument("--seq-len", type=int, default=128,
-                        help="Approximate input length in tokens (default: 128)")
+    parser.add_argument(
+        "--seq-len", type=int, default=128, help="Approximate input length in tokens (default: 128)"
+    )
     args = parser.parse_args()
 
     print(f"\nGLiNER2 Benchmark (seq_len={args.seq_len})")
-    print(f"  model: {args.model}\n  requests: {args.num_requests}\n  concurrency: {args.concurrency}\n")
-    results = asyncio.run(run_benchmark(
-        args.base_url, args.model, args.num_requests,
-        args.concurrency, args.warmup, args.seq_len,
-    ))
+    print(
+        f"  model: {args.model}\n  requests: {args.num_requests}\n  concurrency: {args.concurrency}\n"
+    )
+    results = asyncio.run(
+        run_benchmark(
+            args.base_url,
+            args.model,
+            args.num_requests,
+            args.concurrency,
+            args.warmup,
+            args.seq_len,
+        )
+    )
     print("\n" + "=" * 60)
     print("GLiNER2 Benchmark Results")
     print("=" * 60)

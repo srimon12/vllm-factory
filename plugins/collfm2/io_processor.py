@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import torch
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
 from vllm.inputs import TokensPrompt
@@ -35,13 +34,13 @@ from vllm.outputs import PoolingRequestOutput
 from vllm.plugins.io_processors.interface import IOProcessor
 from vllm.pooling_params import PoolingParams
 
-
 VISUAL_PROMPT_PREFIX = "<|im_start|>user\n<image>Describe the image.<|im_end|>"
 
 
 @dataclass
 class ColLFM2Input:
     """Validated embedding request after parse_request."""
+
     prompt: str | dict
     is_query: bool = True
     metadata: dict = field(default_factory=dict)
@@ -76,12 +75,12 @@ class ColLFM2IOProcessor(IOProcessor[ColLFM2Input, list[float]]):
             with self._tokenizer_lock:
                 if self._hf_tokenizer is None:
                     from transformers import AutoProcessor
+
                     proc = AutoProcessor.from_pretrained(
-                        self._model_id, trust_remote_code=True,
+                        self._model_id,
+                        trust_remote_code=True,
                     )
-                    self._hf_tokenizer = (
-                        proc.tokenizer if hasattr(proc, "tokenizer") else proc
-                    )
+                    self._hf_tokenizer = proc.tokenizer if hasattr(proc, "tokenizer") else proc
 
     def parse_request(self, request: Any) -> ColLFM2Input:
         if hasattr(request, "data"):
@@ -92,26 +91,24 @@ class ColLFM2IOProcessor(IOProcessor[ColLFM2Input, list[float]]):
             data = request
 
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Expected dict with 'text' or 'image' key, got {type(data)}"
-            )
+            raise ValueError(f"Expected dict with 'text' or 'image' key, got {type(data)}")
 
         if "text" in data:
             is_query = bool(data.get("is_query", True))
             return ColLFM2Input(
-                prompt=data["text"], is_query=is_query,
+                prompt=data["text"],
+                is_query=is_query,
                 metadata={"is_query": is_query},
             )
         elif "image" in data:
             is_query = bool(data.get("is_query", False))
             return ColLFM2Input(
-                prompt={"image": data["image"]}, is_query=is_query,
+                prompt={"image": data["image"]},
+                is_query=is_query,
                 metadata={"is_query": is_query},
             )
         else:
-            raise ValueError(
-                "Request data must contain either 'text' or 'image' key"
-            )
+            raise ValueError("Request data must contain either 'text' or 'image' key")
 
     def _load_image(self, source: Any):
         """Resolve an image source to a PIL Image."""
@@ -127,11 +124,13 @@ class ColLFM2IOProcessor(IOProcessor[ColLFM2Input, list[float]]):
             if source.startswith("data:"):
                 import base64
                 from io import BytesIO
+
                 header, b64data = source.split(",", 1)
                 return PILImage.open(BytesIO(base64.b64decode(b64data))).convert("RGB")
             if source.startswith(("http://", "https://")):
                 import urllib.request
                 from io import BytesIO
+
                 with urllib.request.urlopen(source) as resp:
                     return PILImage.open(BytesIO(resp.read())).convert("RGB")
             return PILImage.open(source).convert("RGB")
@@ -179,7 +178,8 @@ class ColLFM2IOProcessor(IOProcessor[ColLFM2Input, list[float]]):
             }
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         with self._lock:
             extra = self._pending_extra_kwargs
@@ -224,7 +224,8 @@ class ColLFM2IOProcessor(IOProcessor[ColLFM2Input, list[float]]):
         return emb.tolist()
 
     def output_to_response(
-        self, plugin_output: list[float],
+        self,
+        plugin_output: list[float],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

@@ -91,9 +91,9 @@ async def run_benchmark(
             async with semaphore:
                 return await send_request(session, url, model, text, entities)
 
-        latencies = await asyncio.gather(*[
-            bounded(texts[i % len(texts)]) for i in range(num_requests)
-        ])
+        latencies = await asyncio.gather(
+            *[bounded(texts[i % len(texts)]) for i in range(num_requests)]
+        )
         elapsed = time.perf_counter() - start
 
     latencies = sorted(latencies)
@@ -116,15 +116,22 @@ def main():
     parser.add_argument("--num-requests", type=int, default=1000)
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--warmup", type=int, default=200)
-    parser.add_argument("--seq-len", type=int, default=128,
-                        help="Approximate input length in tokens (default: 128)")
+    parser.add_argument(
+        "--seq-len", type=int, default=128, help="Approximate input length in tokens (default: 128)"
+    )
     args = parser.parse_args()
 
     print(f"\nmT5-GLiNER Benchmark (seq_len={args.seq_len})")
-    results = asyncio.run(run_benchmark(
-        args.base_url, args.model, args.num_requests,
-        args.concurrency, args.warmup, args.seq_len,
-    ))
+    results = asyncio.run(
+        run_benchmark(
+            args.base_url,
+            args.model,
+            args.num_requests,
+            args.concurrency,
+            args.warmup,
+            args.seq_len,
+        )
+    )
     print("\n" + "=" * 60)
     print("mT5-GLiNER Benchmark Results")
     print("=" * 60)

@@ -46,11 +46,14 @@ def phase_prepare():
     embeddings = model.encode(TEXTS, convert_to_tensor=True, normalize_embeddings=True)
     print(f"Reference embeddings: {embeddings.shape}")
 
-    torch.save({
-        "embeddings": embeddings.cpu().float(),
-        "texts": TEXTS,
-        "model": MODEL,
-    }, REF_FILE)
+    torch.save(
+        {
+            "embeddings": embeddings.cpu().float(),
+            "texts": TEXTS,
+            "model": MODEL,
+        },
+        REF_FILE,
+    )
     print(f"Saved to {REF_FILE}")
     print("Phase 1 complete\n")
 
@@ -94,15 +97,13 @@ def phase_test():
         outputs = llm.embed(inputs)
     latency = (time.perf_counter() - t0) / N * 1000
 
-    vllm_embeddings = torch.stack([
-        torch.as_tensor(o.outputs.embedding).float() for o in outputs
-    ])
+    vllm_embeddings = torch.stack([torch.as_tensor(o.outputs.embedding).float() for o in outputs])
     print(f"vLLM embeddings: {vllm_embeddings.shape}, Latency: {latency:.1f}ms")
 
     # Cosine similarity per sample
-    print(f"\n{'─'*60}")
+    print(f"\n{'─' * 60}")
     print("  Parity (cosine similarity, threshold >= 0.99)")
-    print(f"{'─'*60}")
+    print(f"{'─' * 60}")
 
     all_passed = True
     cosines = []
@@ -118,7 +119,7 @@ def phase_test():
         print(f"  {i}: cos={cos:.6f}  {status}  {text_short}...")
 
     mean_cos = sum(cosines) / len(cosines)
-    print(f"{'─'*60}")
+    print(f"{'─' * 60}")
     print(f"  Mean cosine: {mean_cos:.6f}")
     print(f"  Latency: {latency:.1f}ms for {len(TEXTS)} texts")
 

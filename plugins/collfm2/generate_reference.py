@@ -56,6 +56,7 @@ REFERENCE_QUERIES = [
 def _make_synthetic_image(width: int = 640, height: int = 480) -> Image.Image:
     """Create a simple RGB gradient image for testing."""
     import numpy as np
+
     arr = np.zeros((height, width, 3), dtype=np.uint8)
     for y in range(height):
         for x in range(width):
@@ -80,6 +81,7 @@ def _load_reference_model(model_path: str, device: str):
 
     # Patch: the package hardcodes flash_attention_2; we need sdpa (no flash_attn pkg)
     from transformers import AutoModelForImageTextToText
+
     _orig = AutoModelForImageTextToText.from_pretrained
 
     def _sdpa_from_pretrained(*args, **kwargs):
@@ -101,8 +103,6 @@ def _load_reference_model(model_path: str, device: str):
     n_params = sum(p.numel() for p in model.parameters())
     print(f"[reference] Model loaded ({n_params / 1e6:.1f}M params) on {device}")
     return model, processor
-
-
 
 
 def _embed_queries_reference(
@@ -221,12 +221,12 @@ def main():
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("ColLFM2 Reference Generator")
     print(f"  model:      {args.model}")
     print(f"  output_dir: {out_dir}")
     print(f"  device:     {args.device}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     model, processor = _load_reference_model(args.model, args.device)
 
@@ -302,13 +302,13 @@ def main():
         json.dump(metadata, f, indent=2)
     print(f"\n  → Saved metadata: {meta_path}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Reference generation complete.")
     print(f"  Queries:    {query_path}")
     print(f"  Images:     {image_path}")
     print(f"  Metadata:   {meta_path}")
     print(f"  Reference throughput: {bench['req_s']} req/s")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
     print("NEXT STEP: reinstall vllm==0.15.1 before running parity_test.py")
     print("  pip install vllm==0.15.1")
 

@@ -31,9 +31,7 @@ _ENCODER_PATH = Path(__file__).resolve().parents[2] / "models" / "mt5" / "mt5_en
 
 
 def _import_mt5_encoder():
-    spec = importlib.util.spec_from_file_location(
-        "mt5_encoder", str(_ENCODER_PATH)
-    )
+    spec = importlib.util.spec_from_file_location("mt5_encoder", str(_ENCODER_PATH))
     mod = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("mt5_encoder", mod)
     spec.loader.exec_module(mod)
@@ -47,18 +45,10 @@ MT5Encoder = _encoder_mod.MT5Encoder
 # HF T5 key → custom MT5Encoder key mapping
 _ATTN_PROJ_MAP = {"q": "q_proj", "k": "k_proj", "v": "v_proj", "o": "out_proj"}
 
-_BLOCK_ATTN_RE = re.compile(
-    r"^encoder\.block\.(\d+)\.layer\.0\.SelfAttention\.(.+)$"
-)
-_BLOCK_ATTN_NORM_RE = re.compile(
-    r"^encoder\.block\.(\d+)\.layer\.0\.layer_norm\.(.+)$"
-)
-_BLOCK_FF_RE = re.compile(
-    r"^encoder\.block\.(\d+)\.layer\.1\.DenseReluDense\.(.+)$"
-)
-_BLOCK_FF_NORM_RE = re.compile(
-    r"^encoder\.block\.(\d+)\.layer\.1\.layer_norm\.(.+)$"
-)
+_BLOCK_ATTN_RE = re.compile(r"^encoder\.block\.(\d+)\.layer\.0\.SelfAttention\.(.+)$")
+_BLOCK_ATTN_NORM_RE = re.compile(r"^encoder\.block\.(\d+)\.layer\.0\.layer_norm\.(.+)$")
+_BLOCK_FF_RE = re.compile(r"^encoder\.block\.(\d+)\.layer\.1\.DenseReluDense\.(.+)$")
+_BLOCK_FF_NORM_RE = re.compile(r"^encoder\.block\.(\d+)\.layer\.1\.layer_norm\.(.+)$")
 
 
 def _map_hf_t5_key(hf_key: str) -> str | None:
@@ -72,7 +62,7 @@ def _map_hf_t5_key(hf_key: str) -> str | None:
 
     # final_layer_norm
     if hf_key.startswith("encoder.final_layer_norm."):
-        suffix = hf_key[len("encoder.final_layer_norm."):]
+        suffix = hf_key[len("encoder.final_layer_norm.") :]
         return f"final_ln.{suffix}"
 
     # Attention projections + RPB
@@ -84,10 +74,18 @@ def _map_hf_t5_key(hf_key: str) -> str | None:
         suffix = parts[1] if len(parts) > 1 else ""
 
         if proj_name == "relative_attention_bias":
-            return f"layers.{layer_idx}.self_attn.rpb.relative_attention_bias.{suffix}" if suffix else None
+            return (
+                f"layers.{layer_idx}.self_attn.rpb.relative_attention_bias.{suffix}"
+                if suffix
+                else None
+            )
         elif proj_name in _ATTN_PROJ_MAP:
             mapped_proj = _ATTN_PROJ_MAP[proj_name]
-            return f"layers.{layer_idx}.self_attn.{mapped_proj}.{suffix}" if suffix else f"layers.{layer_idx}.self_attn.{mapped_proj}"
+            return (
+                f"layers.{layer_idx}.self_attn.{mapped_proj}.{suffix}"
+                if suffix
+                else f"layers.{layer_idx}.self_attn.{mapped_proj}"
+            )
         return None
 
     # Attention layer norm → ln1
@@ -158,6 +156,7 @@ class GLiNERMT5Model(nn.Module):
         """Override sampling for pooling models — return empty outputs."""
         try:
             from vllm.sequence import SamplerOutput
+
             return SamplerOutput(outputs=[])
         except ImportError:
             return None
@@ -216,13 +215,13 @@ class GLiNERMT5Model(nn.Module):
 
         for hf_name, tensor in weights:
             if hf_name.startswith(gliner_prefix):
-                hf_key = hf_name[len(gliner_prefix):]
+                hf_key = hf_name[len(gliner_prefix) :]
                 mapped = _map_hf_t5_key(hf_key)
                 if mapped is not None:
                     backbone_weights.append((mapped, tensor))
 
             elif hf_name.startswith(projection_prefix):
-                stripped = hf_name[len(projection_prefix):]
+                stripped = hf_name[len(projection_prefix) :]
                 projection_state[stripped] = tensor
 
             else:

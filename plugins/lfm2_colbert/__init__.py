@@ -7,9 +7,9 @@ from .model import LFM2ForColBERT
 
 
 def register() -> None:
-    register_plugin("lfm2_colbert", LFM2ColBERTConfig,
-                     "Lfm2Model", LFM2ForColBERT,
-                     aliases=["LFM2ForColBERT"])
+    register_plugin(
+        "lfm2_colbert", LFM2ColBERTConfig, "Lfm2Model", LFM2ForColBERT, aliases=["LFM2ForColBERT"]
+    )
 
 
 register()

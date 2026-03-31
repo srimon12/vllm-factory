@@ -11,9 +11,9 @@ from .model import Qwen3VLForColPali
 
 
 def register() -> None:
-    register_plugin("colqwen3", ColQwen3Config,
-                     "Qwen3VLForColPali", Qwen3VLForColPali,
-                     aliases=["ColQwen3"])
+    register_plugin(
+        "colqwen3", ColQwen3Config, "Qwen3VLForColPali", Qwen3VLForColPali, aliases=["ColQwen3"]
+    )
 
 
 register()

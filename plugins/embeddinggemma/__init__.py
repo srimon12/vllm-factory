@@ -11,8 +11,9 @@ from .model import EmbeddingGemmaModel
 
 
 def register() -> None:
-    register_plugin("embedding_gemma", EmbeddingGemmaConfig,
-                     "EmbeddingGemmaModel", EmbeddingGemmaModel)
+    register_plugin(
+        "embedding_gemma", EmbeddingGemmaConfig, "EmbeddingGemmaModel", EmbeddingGemmaModel
+    )
 
 
 register()

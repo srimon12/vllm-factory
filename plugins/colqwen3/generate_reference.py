@@ -40,19 +40,24 @@ QUERIES = [
     "List the main tables or figures described.",
 ]
 
+
 # Synthetic test images (colored rectangles with text-like noise)
 def _make_test_image(idx: int, size: tuple[int, int] = (1024, 1400)) -> Image.Image:
     """Create a synthetic document-like image."""
     import random
+
     random.seed(idx)
     colors = [
-        (245, 245, 245), (240, 248, 255), (255, 248, 240),
+        (245, 245, 245),
+        (240, 248, 255),
+        (255, 248, 240),
     ]
     bg = colors[idx % len(colors)]
     img = Image.new("RGB", size, bg)
 
     # Add some colored rectangles to simulate text blocks
     from PIL import ImageDraw
+
     draw = ImageDraw.Draw(img)
     rng = random.Random(idx * 1337)
     for _ in range(30):
@@ -73,6 +78,7 @@ def _make_test_images(n: int = 3) -> list[Image.Image]:
 # ---------------------------------------------------------------------------
 # Benchmark helpers
 # ---------------------------------------------------------------------------
+
 
 def _time_hf_queries(model, processor, queries: list[str]) -> dict:
     """Measure HF inference throughput for queries."""
@@ -126,6 +132,7 @@ def _time_hf_images(model, processor, images: list[Image.Image]) -> dict:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     p = argparse.ArgumentParser(description="Generate ColQwen3 HF reference embeddings")
     p.add_argument("--model", required=True, help="HuggingFace model ID")
@@ -159,10 +166,10 @@ def main():
     # Patch: newer transformers moves hidden_size into text_config
     try:
         from transformers.models.qwen2_5_vl import Qwen2_5_VLConfig
+
         if not hasattr(Qwen2_5_VLConfig, "hidden_size"):
             Qwen2_5_VLConfig.hidden_size = property(
-                lambda self: self.text_config.hidden_size
-                if hasattr(self, "text_config") else 1536
+                lambda self: self.text_config.hidden_size if hasattr(self, "text_config") else 1536
             )
     except ImportError:
         pass
@@ -228,8 +235,12 @@ def main():
         bench = {"queries": q_bench, "images": i_bench}
         with open(out / "hf_benchmark.json", "w") as f:
             json.dump(bench, f, indent=2)
-        print(f"  queries: {q_bench['req_s']} req/s  p50={q_bench['p50_ms']}ms  p99={q_bench['p99_ms']}ms")
-        print(f"  images:  {i_bench['req_s']} req/s  p50={i_bench['p50_ms']}ms  p99={i_bench['p99_ms']}ms\n")
+        print(
+            f"  queries: {q_bench['req_s']} req/s  p50={q_bench['p50_ms']}ms  p99={q_bench['p99_ms']}ms"
+        )
+        print(
+            f"  images:  {i_bench['req_s']} req/s  p50={i_bench['p50_ms']}ms  p99={i_bench['p99_ms']}ms\n"
+        )
 
     print("=" * 70)
     print(f"✅ Reference outputs saved to {out}")

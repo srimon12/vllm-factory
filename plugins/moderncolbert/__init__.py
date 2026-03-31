@@ -10,9 +10,13 @@ from .model import ModernBertForColBERT
 
 
 def register() -> None:
-    register_plugin("moderncolbert", ModernColBERTConfig,
-                     "ModernBertModel", ModernBertForColBERT,
-                     aliases=["ModernBertForColBERT"])
+    register_plugin(
+        "moderncolbert",
+        ModernColBERTConfig,
+        "ModernBertModel",
+        ModernBertForColBERT,
+        aliases=["ModernBertForColBERT"],
+    )
 
 
 register()

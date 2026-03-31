@@ -68,10 +68,9 @@ async def run_benchmark(
     async with aiohttp.ClientSession(connector=connector) as session:
         # Warmup — critical for accurate results (JIT compilation, CUDA graphs, etc.)
         print(f"  Warming up ({warmup} requests, ~{seq_len} tokens/req)...")
-        await asyncio.gather(*[
-            send_request(session, url, model, texts[i % len(texts)])
-            for i in range(warmup)
-        ])
+        await asyncio.gather(
+            *[send_request(session, url, model, texts[i % len(texts)]) for i in range(warmup)]
+        )
 
         # Timed run
         print(f"  Timed run ({num_requests} requests, concurrency={concurrency})...")
@@ -82,9 +81,9 @@ async def run_benchmark(
                 return await send_request(session, url, model, text)
 
         t0 = time.perf_counter()
-        latencies = await asyncio.gather(*[
-            bounded_request(texts[i % len(texts)]) for i in range(num_requests)
-        ])
+        latencies = await asyncio.gather(
+            *[bounded_request(texts[i % len(texts)]) for i in range(num_requests)]
+        )
         elapsed = time.perf_counter() - t0
 
     latencies = sorted(latencies)
@@ -104,8 +103,9 @@ def main():
     p.add_argument("--num-requests", type=int, default=500)
     p.add_argument("--concurrency", type=int, default=16)
     p.add_argument("--warmup", type=int, default=200)
-    p.add_argument("--seq-len", type=int, default=128,
-                   help="Approximate input length in tokens (default: 128)")
+    p.add_argument(
+        "--seq-len", type=int, default=128, help="Approximate input length in tokens (default: 128)"
+    )
     args = p.parse_args()
 
     print("\nColQwen3 Benchmark")
@@ -116,10 +116,16 @@ def main():
     print(f"  warmup:      {args.warmup}")
     print(f"  seq_len:     {args.seq_len}\n")
 
-    results = asyncio.run(run_benchmark(
-        args.base_url, args.model, args.num_requests,
-        args.concurrency, args.warmup, args.seq_len,
-    ))
+    results = asyncio.run(
+        run_benchmark(
+            args.base_url,
+            args.model,
+            args.num_requests,
+            args.concurrency,
+            args.warmup,
+            args.seq_len,
+        )
+    )
 
     print()
     print("─" * 40)

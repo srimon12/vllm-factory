@@ -112,6 +112,7 @@ def prepare_model_dir() -> str:
     # Download/locate HF model files
     try:
         from huggingface_hub import snapshot_download
+
         hf_dir = snapshot_download(HF_MODEL_ID)
     except Exception as e:
         raise RuntimeError(
@@ -123,12 +124,8 @@ def prepare_model_dir() -> str:
     hf_path = Path(hf_dir)
 
     # Write our custom config files
-    (MODEL_CACHE_DIR / "config.json").write_text(
-        json.dumps(VLLM_CONFIG, indent=2)
-    )
-    (MODEL_CACHE_DIR / "tokenizer_config.json").write_text(
-        json.dumps(TOKENIZER_CONFIG, indent=2)
-    )
+    (MODEL_CACHE_DIR / "config.json").write_text(json.dumps(VLLM_CONFIG, indent=2))
+    (MODEL_CACHE_DIR / "tokenizer_config.json").write_text(json.dumps(TOKENIZER_CONFIG, indent=2))
 
     # Symlink remaining files from HF cache
     for filename in HF_FILES_TO_LINK:
@@ -159,8 +156,7 @@ def register() -> None:
     )
 
     apply_pooling_attention_mask_patch()
-    register_plugin("gliner_linker", GLiNERLinkerConfig,
-                     "GLiNERLinkerModel", GLiNERLinkerModel)
+    register_plugin("gliner_linker", GLiNERLinkerConfig, "GLiNERLinkerModel", GLiNERLinkerModel)
 
 
 register()

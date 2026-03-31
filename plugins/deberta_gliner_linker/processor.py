@@ -78,12 +78,13 @@ class GLiNERLinkerProcessor:
     def _ensure_llm(self):
         if self._llm is not None:
             return
+        from vllm import LLM
+
         import plugins.deberta_gliner_linker  # noqa: F401
         from plugins.deberta_gliner_linker import get_model_path
         from plugins.deberta_gliner_linker.vllm_pooling_attention_mask import (
             apply_pooling_attention_mask_patch,
         )
-        from vllm import LLM
 
         apply_pooling_attention_mask_patch()
 
@@ -273,13 +274,15 @@ class GLiNERLinkerProcessor:
             else:
                 entity_text = " ".join(tok["words"][ws : we + 1])
 
-            entities.append({
-                "start": char_start,
-                "end": char_end,
-                "text": entity_text,
-                "label": span.entity_type,
-                "score": round(span.score, 4),
-            })
+            entities.append(
+                {
+                    "start": char_start,
+                    "end": char_end,
+                    "text": entity_text,
+                    "label": span.entity_type,
+                    "score": round(span.score, 4),
+                }
+            )
 
         return entities
 

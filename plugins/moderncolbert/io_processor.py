@@ -25,7 +25,6 @@ from typing import Any
 
 import torch
 from transformers import AutoTokenizer
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
 from vllm.inputs import TokensPrompt
@@ -34,14 +33,14 @@ from vllm.outputs import PoolingRequestOutput
 from vllm.plugins.io_processors.interface import IOProcessor
 from vllm.pooling_params import PoolingParams
 
-
-QUERY_PREFIX_ID = 50368   # [Q] with trailing space
-DOC_PREFIX_ID = 50369     # [D] with trailing space
+QUERY_PREFIX_ID = 50368  # [Q] with trailing space
+DOC_PREFIX_ID = 50369  # [D] with trailing space
 
 
 @dataclass
 class ModernColBERTInput:
     """Validated embedding request after parse_request."""
+
     text: str
     is_query: bool = True
 
@@ -66,7 +65,9 @@ class ModernColBERTIOProcessor(IOProcessor[ModernColBERTInput, list[float]]):
 
         model_id = vllm_config.model_config.model
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_id, use_fast=True, trust_remote_code=True,
+            model_id,
+            use_fast=True,
+            trust_remote_code=True,
         )
 
     def parse_request(self, request: Any) -> ModernColBERTInput:
@@ -120,7 +121,8 @@ class ModernColBERTIOProcessor(IOProcessor[ModernColBERTInput, list[float]]):
         return TokensPrompt(prompt_token_ids=input_ids)
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         with self._lock:
             extra = self._pending_extra_kwargs
@@ -156,7 +158,8 @@ class ModernColBERTIOProcessor(IOProcessor[ModernColBERTInput, list[float]]):
             return torch.as_tensor(raw).tolist()
 
     def output_to_response(
-        self, plugin_output: list[float],
+        self,
+        plugin_output: list[float],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

@@ -7,8 +7,9 @@ from .model import GLiNERModernBertModel
 
 
 def register() -> None:
-    register_plugin("gliner_mmbert", GLiNERModernBertConfig,
-                     "GLiNERModernBertModel", GLiNERModernBertModel)
+    register_plugin(
+        "gliner_mmbert", GLiNERModernBertConfig, "GLiNERModernBertModel", GLiNERModernBertModel
+    )
 
 
 register()

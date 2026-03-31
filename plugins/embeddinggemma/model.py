@@ -45,6 +45,7 @@ class EmbeddingGemmaModel(nn.Module):
         self.vllm_config = vllm_config
 
         from transformers import AutoModel
+
         self.backbone = AutoModel.from_pretrained(
             config._name_or_path,
             config=config,
@@ -53,11 +54,13 @@ class EmbeddingGemmaModel(nn.Module):
         self.backbone.eval()
 
         from vllm.model_executor.layers.pooler import DispatchPooler
+
         pooler_config = vllm_config.model_config.pooler_config
         self.pooler = DispatchPooler.for_embedding(pooler_config)
 
-    def forward(self, input_ids, positions, intermediate_tensors=None,
-                inputs_embeds=None, **kwargs):
+    def forward(
+        self, input_ids, positions, intermediate_tensors=None, inputs_embeds=None, **kwargs
+    ):
         """Run HF backbone and return hidden states for pooler."""
         position_ids = positions.unsqueeze(0)
         input_ids_2d = input_ids.unsqueeze(0)

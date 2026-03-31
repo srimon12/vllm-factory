@@ -59,11 +59,10 @@ def main():
     # Install plugin so vLLM can find ColLFM2 model type
     try:
         import collfm2  # noqa: F401 — triggers register()
+
         logger.info("ColLFM2 plugin registered")
     except ImportError:
-        logger.warning(
-            "collfm2 package not installed — run: pip install -e plugins/collfm2/"
-        )
+        logger.warning("collfm2 package not installed — run: pip install -e plugins/collfm2/")
 
     server = ModelServer(
         name="collfm2",
@@ -78,12 +77,15 @@ def main():
         enable_prefix_caching=False,
         enable_chunked_prefill=False,
         trust_remote_code=True,
-        task="token_embed",    # vLLM 0.15.1: multi-vector retrieval task
+        task="token_embed",  # vLLM 0.15.1: multi-vector retrieval task
         extra_args=[
-            "--skip-mm-profiling",           # avoids OOM during VLM memory profiling
-            "--mm-processor-cache-gb", "1",  # reduce multimodal cache (default: 4GB)
-            "--limit-mm-per-prompt", '{"image": 1}',  # one image per request (ColPali)
-            "--uvicorn-log-level", "warning",
+            "--skip-mm-profiling",  # avoids OOM during VLM memory profiling
+            "--mm-processor-cache-gb",
+            "1",  # reduce multimodal cache (default: 4GB)
+            "--limit-mm-per-prompt",
+            '{"image": 1}',  # one image per request (ColPali)
+            "--uvicorn-log-level",
+            "warning",
         ],
     )
 

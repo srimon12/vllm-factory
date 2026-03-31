@@ -5,7 +5,6 @@ Extends ModernBertConfig with ColBERT-specific parameters for
 multi-vector retrieval with MaxSim scoring.
 """
 
-
 from transformers import ModernBertConfig
 
 

@@ -26,11 +26,10 @@ from typing import Any
 
 import torch
 from transformers import AutoTokenizer
-
 from vllm.config import VllmConfig
 from vllm.entrypoints.pooling.pooling.protocol import IOProcessorResponse
-from vllm.inputs.data import PromptType
 from vllm.inputs import TokensPrompt
+from vllm.inputs.data import PromptType
 from vllm.outputs import PoolingRequestOutput
 from vllm.plugins.io_processors.interface import IOProcessor
 from vllm.pooling_params import PoolingParams
@@ -42,6 +41,7 @@ from forge.gliner_preprocessor import GLiNERPreprocessor
 @dataclass
 class GLiNERInput:
     """Validated NER request after parse_request."""
+
     text: str
     labels: list[str]
     threshold: float = 0.5
@@ -67,7 +67,9 @@ class MMBertGLiNERIOProcessor(IOProcessor[GLiNERInput, list[dict[str, Any]]]):
 
         model_id = vllm_config.model_config.model
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_id, use_fast=True, trust_remote_code=True,
+            model_id,
+            use_fast=True,
+            trust_remote_code=True,
         )
         config = vllm_config.model_config.hf_config
 
@@ -98,9 +100,7 @@ class MMBertGLiNERIOProcessor(IOProcessor[GLiNERInput, list[dict[str, Any]]]):
             data = request
 
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Expected dict with 'text' and 'labels' keys, got {type(data)}"
-            )
+            raise ValueError(f"Expected dict with 'text' and 'labels' keys, got {type(data)}")
 
         labels = data.get("labels", [])
         if not labels:
@@ -160,7 +160,8 @@ class MMBertGLiNERIOProcessor(IOProcessor[GLiNERInput, list[dict[str, Any]]]):
         return TokensPrompt(prompt_token_ids=ids_list)
 
     def validate_or_generate_params(
-        self, params: PoolingParams | None = None,
+        self,
+        params: PoolingParams | None = None,
     ) -> PoolingParams:
         with self._lock:
             extra = self._pending_extra_kwargs
@@ -220,7 +221,8 @@ class MMBertGLiNERIOProcessor(IOProcessor[GLiNERInput, list[dict[str, Any]]]):
         return entities_batch[0] if entities_batch else []
 
     def output_to_response(
-        self, plugin_output: list[dict[str, Any]],
+        self,
+        plugin_output: list[dict[str, Any]],
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

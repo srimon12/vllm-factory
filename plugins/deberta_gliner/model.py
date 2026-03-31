@@ -28,13 +28,13 @@ from poolers.gliner import GLiNERSpanPooler
 from .config import GLiNERDebertaV2Config
 
 # Load the custom DeBERTa v2 encoder with Flash DeBERTa Triton kernel
-_ENCODER_PATH = Path(__file__).resolve().parents[2] / "models" / "deberta_v2" / "deberta_v2_encoder.py"
+_ENCODER_PATH = (
+    Path(__file__).resolve().parents[2] / "models" / "deberta_v2" / "deberta_v2_encoder.py"
+)
 
 
 def _import_deberta_v2_encoder():
-    spec = importlib.util.spec_from_file_location(
-        "deberta_v2_encoder", str(_ENCODER_PATH)
-    )
+    spec = importlib.util.spec_from_file_location("deberta_v2_encoder", str(_ENCODER_PATH))
     mod = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("deberta_v2_encoder", mod)
     spec.loader.exec_module(mod)
@@ -110,6 +110,7 @@ class GLiNERDebertaV2Model(nn.Module):
         """Override sampling for pooling models — return empty outputs."""
         try:
             from vllm.sequence import SamplerOutput
+
             return SamplerOutput(outputs=[])
         except ImportError:
             return None
@@ -168,11 +169,11 @@ class GLiNERDebertaV2Model(nn.Module):
         for hf_name, tensor in weights:
             if hf_name.startswith(backbone_prefix):
                 # Strip GLiNER prefix, re-add 'deberta.' prefix for custom encoder
-                hf_key = hf_name[len(backbone_prefix):]
+                hf_key = hf_name[len(backbone_prefix) :]
                 backbone_weights.append(("deberta." + hf_key, tensor))
 
             elif hf_name.startswith(projection_prefix):
-                stripped = hf_name[len(projection_prefix):]
+                stripped = hf_name[len(projection_prefix) :]
                 projection_state[stripped] = tensor
 
             else:
@@ -214,6 +215,7 @@ class GLiNERDebertaV2Model(nn.Module):
 
 def _make_pooler_config(cfg: GLiNERDebertaV2Config):
     """Build a config-like namespace with attributes the GLiNERSpanPooler expects."""
+
     class PoolerConfig:
         pass
 
