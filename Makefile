@@ -1,4 +1,4 @@
-.PHONY: install install-minimal test test-serve bench serve lint parity-all ci-test clean help
+.PHONY: install install-minimal test test-serve bench bench-full bench-chart serve lint parity-all ci-test clean help
 
 P ?= moderncolbert
 
@@ -31,8 +31,19 @@ test-serve: ## Run end-to-end serve parity test (P=name or all)
 test-all: ## Run end-to-end serve parity test for all 12 plugins
 	python scripts/serve_parity_test.py
 
-bench: ## Run benchmark for a plugin (P=name)
+bench: ## Run per-plugin benchmark (P=name)
 	python plugins/$(P)/benchmark.py
+
+bench-full: ## Run unified benchmark suite (all registered plugins + charts)
+	python -m bench run --all
+	python -m bench chart --results bench/results/ --output bench/charts/
+
+bench-chart: ## Generate charts from existing results
+	python -m bench chart --results bench/results/ --output bench/charts/
+
+bench-one: ## Run unified benchmark for one plugin (P=name)
+	python -m bench run --plugin $(P)
+	python -m bench chart --results bench/results/ --output bench/charts/
 
 serve: ## Serve a plugin with IOProcessor (P=name, PORT=8000)
 	@echo "Serving $(P) on port $${PORT:-8000}..."

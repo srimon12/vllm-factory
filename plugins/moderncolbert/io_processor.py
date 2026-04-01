@@ -141,25 +141,27 @@ class ModernColBERTIOProcessor(IOProcessor[ModernColBERTInput, list[float]]):
         model_output: Sequence[PoolingRequestOutput],
         request_id: str | None = None,
         **kwargs,
-    ) -> list[float]:
+    ) -> str:
+        import base64
+
         if not model_output:
-            return []
+            return ""
 
         output = model_output[0]
         raw = output.outputs.data
         if raw is None:
-            return []
+            return ""
 
-        if isinstance(raw, torch.Tensor):
-            return raw.tolist()
-        elif isinstance(raw, list):
-            return raw
-        else:
-            return torch.as_tensor(raw).tolist()
+        if not isinstance(raw, torch.Tensor):
+            raw = torch.as_tensor(raw)
+
+        return base64.b64encode(
+            raw.cpu().contiguous().to(torch.float32).numpy().tobytes()
+        ).decode("ascii")
 
     def output_to_response(
         self,
-        plugin_output: list[float],
+        plugin_output: str,
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 

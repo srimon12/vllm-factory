@@ -39,6 +39,12 @@ glinker = [
     "gliner>=0.2.26",
     "glinker>=0.1.0",
 ]
+bench = [
+    "matplotlib>=3.7",
+    "aiohttp>=3.9",
+    "numpy",
+    "datasets>=2.14",
+]
 dev = [
     "pytest>=7.0",
     "pytest-benchmark",

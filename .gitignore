@@ -27,3 +27,7 @@ _model_cache/
 # Dev artifacts (created by scripts, not committed)
 check_*.py
 debug_*.py
+
+# Bench: exclude results, server logs, and chart archive
+bench/results/
+bench/charts/archive/

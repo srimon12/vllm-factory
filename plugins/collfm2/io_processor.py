@@ -199,14 +199,16 @@ class ColLFM2IOProcessor(IOProcessor[ColLFM2Input, list[float]]):
         model_output: Sequence[PoolingRequestOutput],
         request_id: str | None = None,
         **kwargs,
-    ) -> list[float]:
+    ) -> str:
+        import base64
+
         if not model_output:
-            return []
+            return ""
 
         output = model_output[0]
         raw = output.outputs.data
         if raw is None:
-            return []
+            return ""
 
         if isinstance(raw, torch.Tensor):
             emb = raw
@@ -221,11 +223,13 @@ class ColLFM2IOProcessor(IOProcessor[ColLFM2Input, list[float]]):
         if is_image and emb.shape[0] > 1:
             emb = emb[1:]
 
-        return emb.tolist()
+        return base64.b64encode(
+            emb.cpu().contiguous().to(torch.float32).numpy().tobytes()
+        ).decode("ascii")
 
     def output_to_response(
         self,
-        plugin_output: list[float],
+        plugin_output: str,
     ) -> IOProcessorResponse:
         return IOProcessorResponse(data=plugin_output)
 
