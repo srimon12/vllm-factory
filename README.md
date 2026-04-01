@@ -36,7 +36,7 @@ Decoder-based LLM serving is a solved problem. Encoder-based serving is not.
 
 Production traffic is heterogeneous: staggered requests at unpredictable intervals, mixed sequence lengths, variable batch sizes — none of it neatly padded or synchronized. Vanilla PyTorch pipelines (GLiNER, PyLate, SentenceTransformers) process requests sequentially or require manual batching. They block on each `model.forward()`, waste GPU cycles waiting for the next request, and have no scheduler to absorb traffic spikes.
 
-**vLLM Factory bridges that gap.** Every bespoke encoder architecture — ColBERT, GLiNER, entity linking, multimodal retrieval — gets the same production-grade scheduling and memory management as a 70B chat model. No fork. No custom server. Just `vllm serve`.
+**vLLM Factory bridges that gap.** Every bespoke encoder architecture — ColBERT, GLiNER, entity linking, multimodal retrieval — gets the same production-grade scheduling and memory management as a LLMs. No fork. No custom server. Just `vllm serve`.
 
 Each plugin ships an **IOProcessor** that handles all pre- and post-processing inside the vLLM process. Clients send structured JSON (`{"data": {"text": ...}}` or `{"data": {"image": ...}}`), and the IOProcessor converts to model inputs, runs inference, and returns structured results. No client-side tokenization. No manual `extra_kwargs`. Just `POST /pooling`.
 
