@@ -30,6 +30,37 @@ curl -s http://localhost:8000/pooling \
 
 ---
 
+## Benchmarks — vLLM Factory vs vanilla PyTorch
+
+Measured on NVIDIA RTX A5000, 500 requests, 512–768 tokens, bfloat16. Peak throughput factor at optimal concurrency (saturate mode). Full sweep data and charts in [`bench/`](bench/).
+
+| Model | Task | Params | Throughput Factor | vLLM req/s | Parity |
+|:------|:-----|-------:|:-----------------:|:----------:|:------:|
+| [MT5 GLiNER](https://huggingface.co/knowledgator/gliner-x-large) | NER | 800M | **11.7x** | 183 req/s | 1.000 |
+| [LFM2-ColBERT](https://huggingface.co/LiquidAI/LFM2-ColBERT-350M) | Retrieval | 350M | **8.6x** | 321 req/s | 1.000 |
+| [ColLFM2](https://huggingface.co/VAGOsolutions/SauerkrautLM-ColLFM2-450M-v0.1) | Multimodal retrieval | 450M | **5.3x** | 18 req/s | 0.9996 |
+| [MMBert GLiNER](https://huggingface.co/VAGOsolutions/SauerkrautLM-GLiNER) | NER | 150M | **4.6x** | 220 req/s | 1.000 |
+| [ModernColBERT](https://huggingface.co/VAGOsolutions/SauerkrautLM-Multi-Reason-ModernColBERT) | Retrieval | 149M | **3.3x** | 185 req/s | 0.970 |
+| [ColBERT-Zero](https://huggingface.co/lightonai/ColBERT-Zero) | Retrieval | — | **2.5x** | 179 req/s | 0.970 |
+| [DeBERTa GLiNER2](https://huggingface.co/fastino/gliner2-large-v1) | Schema extraction | 304M | **2.4x** | 267 req/s | 1.000 |
+
+> **Throughput factor** = vLLM Factory req/s ÷ vanilla PyTorch req/s. **Parity** = cosine similarity (embeddings) or entity recall (NER) vs reference implementation. All 12/12 plugins pass parity validation.
+
+<details>
+<summary><b>Per-model benchmark charts</b> (click to expand)</summary>
+<br>
+
+| | |
+|:---:|:---:|
+| ![MT5 GLiNER](bench/charts/mt5_gliner.png) | ![LFM2-ColBERT](bench/charts/lfm2_colbert.png) |
+| ![ColLFM2](bench/charts/collfm2.png) | ![MMBert GLiNER](bench/charts/mmbert_gliner.png) |
+| ![ModernColBERT](bench/charts/moderncolbert.png) | ![ColBERT-Zero](bench/charts/colbert_zero.png) |
+| ![DeBERTa GLiNER2](bench/charts/deberta_gliner2.png) | ![Parity](bench/charts/archive/parity.png) |
+
+</details>
+
+---
+
 ## Why vLLM Factory?
 
 Decoder-based LLM serving is a solved problem. Encoder-based serving is not.
@@ -470,13 +501,9 @@ A new plugin needs:
 
 vLLM Factory brings this to every encoder architecture with zero custom serving code.
 
-#### Measured speedups (RTX 4090, 124 requests, 512 tokens)
+#### Measured speedups
 
-| Model | Vanilla | vLLM Factory | Speedup |
-|---|---|---|---|
-| **LFM2-ColBERT** (350M, Mamba/SSM) | HF AutoModel | `vllm serve` | **6.7×** |
-| **MT5 GLiNER** (800M, NER) | GLiNER lib | `vllm serve` | **2.7×** |
-| **EmbeddingGemma** (300M, dense) | SentenceTransformers | `vllm serve` | **1.8×** |
+See [benchmark table above](#benchmarks--vllm-factory-vs-vanilla-pytorch) for the full results — up to **11.7x throughput** at peak concurrency with zero accuracy loss.
 
 ---
 
@@ -515,6 +542,28 @@ make serve P=name  # serve a plugin
 make test P=name   # run parity test
 make lint          # ruff check
 ```
+
+## Who is this for?
+
+- **Model builders** shipping encoder-based models on HuggingFace — you want users to deploy your ColBERT, GLiNER, or embedding model at production throughput without writing a custom server.
+- **ML engineers** running retrieval, NER, or entity linking in production — you need continuous batching, stable latency under load, and structured JSON responses without client-side tokenization.
+- **Platform teams** evaluating encoder serving infrastructure — you need a plugin architecture that supports new models without forking the serving engine, with parity-validated outputs and reproducible benchmarks.
+
+## Roadmap
+
+- [ ] Expand benchmark sweeps to ColQwen3, Nemotron-ColEmbed, and EmbeddingGemma (currently 7/12 models benchmarked)
+- [ ] HuggingFace demo Space — pick a model, type text, see embeddings/entities served by vLLM Factory
+- [ ] CI benchmark automation — run throughput + parity on every PR, publish results to GitHub Pages
+- [ ] Upstream pooling protocol changes to vLLM to reduce runtime patch dependency
+- [ ] Plugin authoring template with validation tooling and step-by-step generator
+
+Track progress in [GitHub Issues labeled `roadmap`](https://github.com/ddickmann/vllm-factory/issues?q=label%3Aroadmap).
+
+## Feedback and benchmark requests
+
+Want your encoder model benchmarked? [Open an issue](https://github.com/ddickmann/vllm-factory/issues/new) with the HuggingFace model ID and we'll add it to the queue. Include the task type (embedding, retrieval, NER, entity linking) and any specific concurrency or sequence length you care about.
+
+For bugs, feature requests, or plugin development questions, use [GitHub Issues](https://github.com/ddickmann/vllm-factory/issues) or [Discussions](https://github.com/ddickmann/vllm-factory/discussions).
 
 ## Acknowledgements
 
