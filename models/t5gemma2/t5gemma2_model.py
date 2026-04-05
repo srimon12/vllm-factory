@@ -22,9 +22,11 @@ from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.model_executor.models.utils import make_layers
 from vllm.sequence import IntermediateTensors
 
+from kernels.flash_t5gemma2_attention import flash_t5gemma2_attention
 from kernels.fused_gemma_rms_norm_dropout_residual import (
     fused_gemma_rms_norm_dropout_residual,
 )
+from kernels.fused_qk_norm_rope import fused_qk_norm_rope
 from kernels.fused_rope_global import fused_rope_global_apply
 
 from .config import (
@@ -38,8 +40,11 @@ from .t5gemma2_encoder import (
     T5Gemma2RotaryEmbedding,
     T5Gemma2TextScaledWordEmbedding,
     _build_segment_ids,
+    _build_sliding_window_mask,
     _resolve_model_config,
     _t5gemma2_use_optimized_paths,
+    _use_flash_attention,
+    _use_fused_qk_norm_rope,
     apply_rotary_pos_emb,
     eager_attention_forward,
     repeat_kv,
@@ -57,7 +62,7 @@ def _build_decoder_attention_masks(
     decoder_attention_mask = decoder_attention_mask.to(dtype=torch.bool)
     encoder_attention_mask = encoder_attention_mask.to(dtype=torch.bool)
 
-    decoder_pair_mask = decoder_attention_mask[:, :, None] & decoder_attention_mask[:, None, :]
+    decoder_key_mask = decoder_attention_mask[:, None, :]
     causal_mask = torch.tril(
         torch.ones(
             decoder_attention_mask.shape[1],
@@ -68,9 +73,10 @@ def _build_decoder_attention_masks(
     )
     segment_ids = _build_segment_ids(position_ids)
     block_mask = segment_ids[:, :, None] == segment_ids[:, None, :]
-    full_self_mask = decoder_pair_mask & causal_mask[None, :, :] & block_mask
+    full_self_mask = decoder_key_mask & causal_mask[None, :, :] & block_mask
 
-    cross_mask = decoder_attention_mask[:, :, None] & encoder_attention_mask[:, None, :]
+    dec_seq = decoder_attention_mask.shape[1]
+    cross_mask = encoder_attention_mask[:, None, :].expand(-1, dec_seq, -1)
 
     merged_masks = {
         "full_attention": torch.cat(
@@ -95,6 +101,52 @@ def _build_decoder_attention_masks(
         merged_masks["sliding_attention"] = merged_masks["full_attention"]
 
     return merged_masks
+
+
+def _build_decoder_flash_metadata(
+    decoder_attention_mask: torch.Tensor,
+    encoder_attention_mask: torch.Tensor,
+    position_ids: torch.Tensor,
+    sliding_window: int | None,
+) -> dict[str, dict[str, object]]:
+    """Build lightweight metadata for the decoder flash attention kernel."""
+
+    decoder_attention_mask = decoder_attention_mask.to(dtype=torch.bool)
+    encoder_attention_mask = encoder_attention_mask.to(dtype=torch.bool)
+
+    key_mask = torch.cat([decoder_attention_mask, encoder_attention_mask], dim=1)
+    self_len = decoder_attention_mask.shape[1]
+
+    segment_ids = _build_segment_ids(position_ids)
+    has_segments = bool(
+        position_ids.shape[1] > 1
+        and (position_ids[:, 1:] <= position_ids[:, :-1]).any()
+    )
+    if has_segments:
+        cross_fill = torch.full(
+            encoder_attention_mask.shape,
+            -1,
+            device=segment_ids.device,
+            dtype=segment_ids.dtype,
+        )
+        segment_ids = torch.cat([segment_ids, cross_fill], dim=1)
+    else:
+        segment_ids = None
+
+    return {
+        "full_attention": {
+            "key_mask": key_mask,
+            "segment_ids": segment_ids,
+            "sliding_window": 0,
+            "self_len": self_len,
+        },
+        "sliding_attention": {
+            "key_mask": key_mask,
+            "segment_ids": segment_ids,
+            "sliding_window": sliding_window or 0,
+            "self_len": self_len,
+        },
+    }
 
 
 class T5Gemma2MergedAttention(nn.Module):
@@ -221,9 +273,9 @@ class T5Gemma2MergedAttention(nn.Module):
         *,
         encoder_hidden_states: torch.Tensor,
         position_embeddings: tuple[torch.Tensor, torch.Tensor],
-        merged_attention_mask: torch.Tensor,
+        merged_attention_mask: torch.Tensor | dict[str, object],
     ) -> torch.Tensor:
-        if (not _t5gemma2_use_optimized_paths()) or self.attn_softcap is not None:
+        if not _t5gemma2_use_optimized_paths():
             return self._forward_reference(
                 hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
@@ -246,11 +298,20 @@ class T5Gemma2MergedAttention(nn.Module):
         k_cross = k_cross.view(batch_size, encoder_seq_len, self.num_kv_heads, self.head_dim)
         v_cross = v_cross.view(batch_size, encoder_seq_len, self.num_kv_heads, self.head_dim)
 
-        q = self.q_norm(q)
-        k_self = self.k_norm(k_self)
+        if _use_fused_qk_norm_rope():
+            cos, sin = position_embeddings
+            q, k_self = fused_qk_norm_rope(
+                q, k_self,
+                self.q_norm.weight, self.k_norm.weight,
+                cos, sin,
+                eps=self.q_norm.variance_epsilon,
+            )
+        else:
+            q = self.q_norm(q)
+            k_self = self.k_norm(k_self)
+            q, k_self = fused_rope_global_apply(q, k_self, *position_embeddings)
         k_cross = self.k_norm(k_cross)
 
-        q, k_self = fused_rope_global_apply(q, k_self, *position_embeddings)
         q = q.transpose(1, 2)
         k_self = k_self.transpose(1, 2)
         v_self = v_self.transpose(1, 2)
@@ -259,16 +320,51 @@ class T5Gemma2MergedAttention(nn.Module):
 
         k = torch.cat([k_self, k_cross], dim=2)
         v = torch.cat([v_self, v_cross], dim=2)
-        attn_output = F.scaled_dot_product_attention(
-            q,
-            k,
-            v,
-            attn_mask=merged_attention_mask,
-            dropout_p=self.dropout_p if self.training else 0.0,
-            is_causal=False,
-            scale=self.scaling,
-            enable_gqa=self.num_heads > self.num_kv_heads,
-        )
+
+        assert isinstance(merged_attention_mask, dict)
+        key_mask = merged_attention_mask.get("key_mask")
+        segment_ids = merged_attention_mask.get("segment_ids")
+        sliding_window = merged_attention_mask.get("sliding_window", 0)
+        self_len = merged_attention_mask.get("self_len", 0)
+
+        if _use_flash_attention():
+            attn_output = flash_t5gemma2_attention(
+                q, k, v,
+                key_mask=key_mask,
+                segment_ids=segment_ids,
+                softcap=self.attn_softcap or 0.0,
+                sliding_window=sliding_window,
+                is_causal=True,
+                self_len=self_len,
+                sm_scale=self.scaling,
+            )
+        else:
+            enable_gqa = self.num_heads > self.num_kv_heads
+            merged_len = k.shape[2]
+            sdpa_mask = torch.zeros(
+                (1, 1, seq_len, merged_len), device=q.device, dtype=q.dtype
+            )
+            causal_mask = torch.triu(
+                torch.full((seq_len, self_len), float("-inf"), device=q.device, dtype=q.dtype),
+                diagonal=1,
+            )
+            sdpa_mask[:, :, :, :self_len] += causal_mask
+            if key_mask is not None:
+                key_m = key_mask[:, None, None, :].to(q.dtype)
+                sdpa_mask = sdpa_mask + torch.where(key_m.bool(), 0.0, float("-inf"))
+            if sliding_window and sliding_window > 0:
+                window_mask = _build_sliding_window_mask(seq_len, sliding_window, device=q.device)
+                window_add = torch.where(window_mask, 0.0, float("-inf")).to(q.dtype)
+                # Only apply to self-attention region
+                sdpa_mask[:, :, :, :self_len] += window_add[:seq_len, :self_len]
+            attn_output = F.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=sdpa_mask,
+                dropout_p=self.dropout_p if self.training else 0.0,
+                is_causal=False,
+                scale=self.scaling,
+                enable_gqa=enable_gqa,
+            )
 
         attn_output = (
             attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
@@ -389,7 +485,7 @@ class T5Gemma2Decoder(nn.Module):
         self.embed_tokens = T5Gemma2TextScaledWordEmbedding(
             text_config.vocab_size,
             text_config.hidden_size,
-            embed_scale=text_config.hidden_size**0.5,
+            embed_scale=float(torch.tensor(text_config.hidden_size**0.5, dtype=torch.bfloat16)),
             eoi_token_index=eoi_token_index,
             quant_config=quant_config,
             prefix=f"{prefix}.embed_tokens",
@@ -495,12 +591,20 @@ class T5Gemma2Decoder(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
 
         del batch_size, decoder_seq_len
-        merged_masks = _build_decoder_attention_masks(
-            attention_mask,
-            encoder_attention_mask,
-            position_ids,
-            self.config.sliding_window,
-        )
+        if _t5gemma2_use_optimized_paths():
+            merged_masks = _build_decoder_flash_metadata(
+                attention_mask,
+                encoder_attention_mask,
+                position_ids,
+                self.config.sliding_window,
+            )
+        else:
+            merged_masks = _build_decoder_attention_masks(
+                attention_mask,
+                encoder_attention_mask,
+                position_ids,
+                self.config.sliding_window,
+            )
         position_embeddings = {
             layer_type: self.rotary_emb(
                 hidden_states,
@@ -646,6 +750,18 @@ class T5Gemma2Model(nn.Module):
             loaded_params.add(f"encoder.{name}")
         for name in self.decoder.load_weights(decoder_weights):
             loaded_params.add(f"decoder.{name}")
+
+        if "decoder.embed_tokens.weight" not in loaded_params:
+            self.decoder.embed_tokens.weight.data.copy_(
+                self.encoder.embed_tokens.weight.data
+            )
+            loaded_params.add("decoder.embed_tokens.weight")
+        if "decoder.embed_tokens.eoi_embedding" not in loaded_params:
+            self.decoder.embed_tokens.eoi_embedding.data.copy_(
+                self.encoder.embed_tokens.eoi_embedding.data
+            )
+            loaded_params.add("decoder.embed_tokens.eoi_embedding")
+
         return loaded_params
 
 

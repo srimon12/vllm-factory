@@ -10,11 +10,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-try:
-    from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS
-except ImportError:
-    ROPE_INIT_FUNCTIONS = {}
-
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import (
     get_pp_group,
@@ -34,9 +29,12 @@ from vllm.model_executor.models.siglip import SiglipVisionModel
 from vllm.model_executor.models.utils import make_layers
 from vllm.sequence import IntermediateTensors
 
+from kernels.flash_t5gemma2_attention import flash_t5gemma2_attention
+from kernels.fused_embed_scale_eoi import fused_embed_scale_eoi
 from kernels.fused_gemma_rms_norm_dropout_residual import (
     fused_gemma_rms_norm_dropout_residual,
 )
+from kernels.fused_qk_norm_rope import fused_qk_norm_rope
 from kernels.fused_rope_global import fused_rope_global_apply
 
 from .config import (
@@ -51,6 +49,53 @@ from .config import (
 def _t5gemma2_use_optimized_paths() -> bool:
     flag = os.getenv("VLLM_FACTORY_T5GEMMA2_REFERENCE_PATH", "")
     return flag.lower() not in {"1", "true", "yes", "on"}
+
+
+def _use_flash_attention() -> bool:
+    return os.getenv("T5GEMMA2_NO_FLASH", "") == ""
+
+
+def _use_fused_qk_norm_rope() -> bool:
+    return os.getenv("T5GEMMA2_NO_FUSED_NORM_ROPE", "") == ""
+
+
+def _use_fused_embed() -> bool:
+    """Off by default -- benchmarks show zero end-to-end speedup."""
+    return os.getenv("T5GEMMA2_FUSED_EMBED", "") != ""
+
+
+def _siglip_sdpa_attention_forward(self, hidden_states: torch.Tensor):
+    """Pure-PyTorch SDPA replacement for SiglipAttention.forward.
+
+    Reuses the existing QKVParallelLinear weights but bypasses the fused
+    Triton MMEncoderAttention kernel in favour of F.scaled_dot_product_attention
+    for bit-exact parity with HuggingFace's SigLIP implementation.
+    """
+    batch_size, seq_len, _ = hidden_states.shape
+    qkv_states, _ = self.qkv_proj(hidden_states)
+    q, k, v = qkv_states.chunk(3, dim=-1)
+
+    q = q.view(batch_size, seq_len, self.num_heads_per_partition, self.head_dim).transpose(1, 2)
+    k = k.view(batch_size, seq_len, self.num_heads_per_partition, self.head_dim).transpose(1, 2)
+    v = v.view(batch_size, seq_len, self.num_heads_per_partition, self.head_dim).transpose(1, 2)
+
+    attn_output = F.scaled_dot_product_attention(
+        q, k, v, scale=self.scale, dropout_p=0.0,
+    )
+    attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
+    attn_output, _ = self.out_proj(attn_output)
+    return attn_output, None
+
+
+def _patch_siglip_for_reference_path(vision_model: SiglipVisionModel) -> None:
+    """Replace fused Triton attention with SDPA in every SigLIP encoder layer."""
+    from vllm.model_executor.models.siglip import SiglipAttention
+
+    for layer in vision_model.vision_model.encoder.layers:
+        attn = layer.self_attn
+        if isinstance(attn, SiglipAttention):
+            import types
+            attn.forward = types.MethodType(_siglip_sdpa_attention_forward, attn)
 
 
 def _resolve_model_config(
@@ -222,11 +267,15 @@ def _build_encoder_attention_plans(
 
     sliding_attention_mask = full_attention_mask
     if sliding_window is not None:
-        sliding_attention_mask = _build_sliding_window_mask(
+        window_mask = _build_sliding_window_mask(
             attention_mask.shape[1],
             sliding_window,
             device=attention_mask.device,
         )
+        if full_attention_mask is not None:
+            sliding_attention_mask = window_mask & full_attention_mask
+        else:
+            sliding_attention_mask = window_mask
 
     return {
         "full_attention": {
@@ -240,6 +289,34 @@ def _build_encoder_attention_plans(
     }
 
 
+def _build_encoder_flash_metadata(
+    attention_mask: torch.Tensor,
+    position_ids: torch.Tensor,
+    sliding_window: int | None,
+) -> dict[str, dict[str, object]]:
+    """Build lightweight metadata for the flash attention kernel."""
+
+    attention_mask = attention_mask.to(dtype=torch.bool)
+    segment_ids = _build_segment_ids(position_ids)
+    has_segments = bool(
+        position_ids.shape[1] > 1
+        and (position_ids[:, 1:] <= position_ids[:, :-1]).any()
+    )
+
+    return {
+        "full_attention": {
+            "key_mask": attention_mask,
+            "segment_ids": segment_ids if has_segments else None,
+            "sliding_window": 0,
+        },
+        "sliding_attention": {
+            "key_mask": attention_mask,
+            "segment_ids": segment_ids if has_segments else None,
+            "sliding_window": sliding_window or 0,
+        },
+    }
+
+
 def _build_encoder_attention_masks_reference(
     attention_mask: torch.Tensor,
     position_ids: torch.Tensor,
@@ -248,11 +325,11 @@ def _build_encoder_attention_masks_reference(
     """Build HF-style encoder masks for the reference path."""
 
     attention_mask = attention_mask.to(dtype=torch.bool)
-    pair_mask = attention_mask[:, :, None] & attention_mask[:, None, :]
+    key_mask = attention_mask[:, None, :]
 
     segment_ids = _build_segment_ids(position_ids)
     block_mask = segment_ids[:, :, None] == segment_ids[:, None, :]
-    full_mask = pair_mask & block_mask
+    full_mask = key_mask & block_mask
 
     mask_mapping = {"full_attention": full_mask[:, None, :, :]}
 
@@ -328,6 +405,14 @@ class T5Gemma2TextScaledWordEmbedding(VocabParallelEmbedding):
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
         embeddings = super().forward(input_ids)
+        if _t5gemma2_use_optimized_paths() and _use_fused_embed() and embeddings.is_cuda:
+            return fused_embed_scale_eoi(
+                embeddings,
+                input_ids,
+                self.scalar_embed_scale,
+                self.eoi_token_index,
+                self.eoi_embedding if self.eoi_token_index is not None else None,
+            )
         embeddings = embeddings * self.embed_scale.to(dtype=embeddings.dtype, device=embeddings.device)
         if self.eoi_token_index is not None:
             eoi_mask = input_ids == self.eoi_token_index
@@ -399,31 +484,28 @@ class T5Gemma2RotaryEmbedding(nn.Module):
             if rope_params is None:
                 continue
 
-            rope_type = rope_params.get("rope_type", "default")
-            if rope_type != "default" and rope_type in ROPE_INIT_FUNCTIONS:
-                inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](
-                    config,
-                    device=None,
-                    layer_type=layer_type,
-                )
-            else:
-                inv_freq, attention_scaling = self.compute_default_rope_parameters(
-                    config,
-                    layer_type=layer_type,
-                )
-
+            inv_freq, attention_scaling = self._compute_rope_parameters(
+                config, layer_type=layer_type,
+            )
             self.register_buffer(f"{layer_type}_inv_freq", inv_freq, persistent=False)
             setattr(self, f"{layer_type}_attention_scaling", attention_scaling)
 
     @staticmethod
-    def compute_default_rope_parameters(
+    def _compute_rope_parameters(
         config: T5Gemma2TextConfig,
         *,
         layer_type: str,
     ) -> tuple[torch.Tensor, float]:
-        base = config.rope_parameters[layer_type]["rope_theta"]
+        rope_params = config.rope_parameters[layer_type]
+        base = rope_params["rope_theta"]
         dim = getattr(config, "head_dim", None) or config.hidden_size // config.num_attention_heads
         inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+
+        rope_type = rope_params.get("rope_type", "default")
+        if rope_type in ("linear", "linear_scaling"):
+            factor = rope_params.get("factor", 1.0)
+            inv_freq = inv_freq / factor
+
         return inv_freq, 1.0
 
     def forward(
@@ -618,11 +700,11 @@ class T5Gemma2SelfAttention(nn.Module):
         position_embeddings: tuple[torch.Tensor, torch.Tensor],
         attention_mask: (
             torch.Tensor
-            | dict[str, torch.Tensor | list[list[tuple[int, int]]] | None]
+            | dict[str, object]
             | None
         ),
     ) -> torch.Tensor:
-        if (not _t5gemma2_use_optimized_paths()) or self.attn_softcap is not None:
+        if not _t5gemma2_use_optimized_paths():
             return self._forward_reference(
                 hidden_states,
                 position_embeddings=position_embeddings,
@@ -637,46 +719,52 @@ class T5Gemma2SelfAttention(nn.Module):
         q = q.view(batch_size, seq_len, self.num_heads, self.head_dim)
         k = k.view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
         v = v.view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
-        q = self.q_norm(q)
-        k = self.k_norm(k)
-        q, k = fused_rope_global_apply(q, k, *position_embeddings)
+
+        if _use_fused_qk_norm_rope():
+            cos, sin = position_embeddings
+            q, k = fused_qk_norm_rope(
+                q, k,
+                self.q_norm.weight, self.k_norm.weight,
+                cos, sin,
+                eps=self.q_norm.variance_epsilon,
+            )
+        else:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+            q, k = fused_rope_global_apply(q, k, *position_embeddings)
+
         q = q.transpose(1, 2)
         k = k.transpose(1, 2)
         v = v.transpose(1, 2)
 
         assert isinstance(attention_mask, dict)
-        shared_mask = attention_mask.get("mask")
-        segments = attention_mask.get("segments")
-        enable_gqa = self.num_heads > self.num_kv_heads
+        key_mask = attention_mask.get("key_mask")
+        segment_ids = attention_mask.get("segment_ids")
+        sliding_window = attention_mask.get("sliding_window", 0)
 
-        if segments is None:
-            attn_output = self._scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attention_mask=shared_mask,
-                enable_gqa=enable_gqa,
+        if _use_flash_attention():
+            attn_output = flash_t5gemma2_attention(
+                q, k, v,
+                key_mask=key_mask,
+                segment_ids=segment_ids,
+                softcap=self.attn_softcap or 0.0,
+                sliding_window=sliding_window,
+                is_causal=False,
+                sm_scale=self.scaling,
             )
         else:
-            attn_output = torch.zeros(
-                (batch_size, self.num_heads, seq_len, self.head_dim),
-                device=q.device,
-                dtype=q.dtype,
+            enable_gqa = self.num_heads > self.num_kv_heads
+            sdpa_mask = None
+            if key_mask is not None:
+                sdpa_mask = key_mask[:, None, None, :].to(dtype=q.dtype)
+                sdpa_mask = torch.where(sdpa_mask.bool(), 0.0, float("-inf"))
+            if sliding_window and sliding_window > 0:
+                window_mask = _build_sliding_window_mask(seq_len, sliding_window, device=q.device)
+                window_add = torch.where(window_mask, 0.0, float("-inf")).to(q.dtype)
+                sdpa_mask = window_add if sdpa_mask is None else sdpa_mask + window_add
+            attn_output = self._scaled_dot_product_attention(
+                q, k, v, attention_mask=sdpa_mask, enable_gqa=enable_gqa,
             )
-            for batch_idx, batch_segments in enumerate(segments):
-                for start, end in batch_segments:
-                    segment_mask = None
-                    if shared_mask is not None:
-                        segment_mask = shared_mask[..., : end - start, : end - start]
-                    attn_output[batch_idx : batch_idx + 1, :, start:end, :] = (
-                        self._scaled_dot_product_attention(
-                            q[batch_idx : batch_idx + 1, :, start:end, :],
-                            k[batch_idx : batch_idx + 1, :, start:end, :],
-                            v[batch_idx : batch_idx + 1, :, start:end, :],
-                            attention_mask=segment_mask,
-                            enable_gqa=enable_gqa,
-                        )
-                    )
 
         attn_output = (
             attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
@@ -820,7 +908,7 @@ class T5Gemma2Encoder(nn.Module):
             self.embed_tokens = T5Gemma2TextScaledWordEmbedding(
                 text_config.vocab_size,
                 text_config.hidden_size,
-                embed_scale=text_config.hidden_size**0.5,
+                embed_scale=float(torch.tensor(text_config.hidden_size**0.5, dtype=torch.bfloat16)),
                 eoi_token_index=eoi_token_index,
                 quant_config=quant_config,
                 prefix=f"{text_prefix}.embed_tokens",
@@ -836,6 +924,8 @@ class T5Gemma2Encoder(nn.Module):
                 quant_config=quant_config,
                 prefix=f"{prefix}.vision_tower",
             )
+            if not _t5gemma2_use_optimized_paths():
+                _patch_siglip_for_reference_path(self.vision_tower)
             self.multi_modal_projector = T5Gemma2MultiModalProjector(encoder_config)
 
         self.dropout = nn.Dropout(getattr(text_config, "dropout_rate", 0.0))
@@ -993,7 +1083,7 @@ class T5Gemma2Encoder(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
 
         if self.use_optimized_attention:
-            mask_mapping = _build_encoder_attention_plans(
+            mask_mapping = _build_encoder_flash_metadata(
                 attention_mask,
                 position_ids,
                 self.config.sliding_window,

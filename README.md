@@ -394,6 +394,12 @@ vllm serve plugins/modernbert_gliner_rerank/_model_cache \
 | `deberta_gliner_linker` | Dual DeBERTa + LSTM + scorer | [`knowledgator/gliner-linker-large-v1.0`](https://huggingface.co/knowledgator/gliner-linker-large-v1.0) | 304M |
 | `modernbert_gliner_rerank` | ModernBERT + projection + LSTM | [`knowledgator/gliner-linker-rerank-v1.0`](https://huggingface.co/knowledgator/gliner-linker-rerank-v1.0) | 68M |
 
+### Encoder Backbones (no pooler yet)
+
+| Model | Architecture | Checkpoint | Params | Status |
+|---|---|---|---|---|
+| `t5gemma2` | T5-Gemma2 encoder-decoder (text + vision) | [`google/t5gemma-2-270m-270m`](https://huggingface.co/google/t5gemma-2-270m-270m) | 270M+270M | Encoder + decoder backbone, full HF parity, custom Triton kernels. No pooler/IOProcessor yet -- available as a building block for downstream tasks (ColPali, GLiNER, OCR, etc.). See [`models/t5gemma2/README.md`](models/t5gemma2/README.md). |
+
 ---
 
 ## Parity — all 12 plugins validated
@@ -459,6 +465,8 @@ The **FactoryPooler** protocol (`vllm_factory/pooling/protocol.py`) has zero vLL
 | Kernel | What it optimizes |
 |---|---|
 | `flash_deberta_attention` | Fused c2p + p2c disentangled relative position bias for DeBERTa |
+| `flash_t5gemma2_attention` | Tiled flash attention with softcapping, asymmetric sliding window, GQA, merged self+cross for T5Gemma2 (1.48x speedup) |
+| `fused_qk_norm_rope` | GemmaRMSNorm + RoPE fused in single pass per head vector for T5Gemma2 (1.10x speedup) |
 | `fused_glu_mlp` | Fused GeGLU chunk + GELU + mul + dropout |
 | `fused_rope_global` | RoPE for ModernBERT global attention layers |
 | `fused_rope_local` | RoPE for ModernBERT sliding-window local attention |
@@ -470,7 +478,7 @@ The **FactoryPooler** protocol (`vllm_factory/pooling/protocol.py`) has zero vLL
 ```
 vllm-factory/
 ├── plugins/              # 12 model plugins (each with io_processor.py + parity_test.py)
-├── models/               # Encoder backbones (DeBERTa, ModernBERT, mT5, ...)
+├── models/               # Encoder backbones (DeBERTa, ModernBERT, mT5, T5Gemma2, ...)
 ├── kernels/              # Custom Triton kernels
 ├── poolers/              # Shared pooler heads (ColBERT, GLiNER, ColPali, linker)
 ├── vllm_factory/         # Core abstractions (FactoryPooler protocol, VllmPoolerAdapter, compat layer)

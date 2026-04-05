@@ -248,10 +248,11 @@ else:
 
 
 def require_t5gemma2_config() -> None:
-    """Raise a clear error when the installed transformers is too old."""
+    """No-op: fallback config classes above cover the missing-transformers case.
 
-    if not HAS_NATIVE_T5GEMMA2_CONFIG:
-        return
+    Call sites (get_t5gemma2_text_config, etc.) work with both native HF
+    configs and our local fallbacks, so nothing needs to be enforced here.
+    """
 
 
 def get_t5gemma2_text_config(
