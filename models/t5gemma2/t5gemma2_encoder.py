@@ -9,7 +9,6 @@ from itertools import islice
 import torch
 import torch.nn.functional as F
 from torch import nn
-
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import (
     get_pp_group,

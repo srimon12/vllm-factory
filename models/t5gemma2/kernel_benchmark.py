@@ -20,7 +20,6 @@ from __future__ import annotations
 import gc
 import os
 import sys
-import time
 
 import torch
 
@@ -189,7 +188,7 @@ def main():
         dec_max, dec_mean = compare("dec", ref_dec, dec_out, d_mask)
         log_max, log_mean = compare("logits", ref_logits, logits, d_mask)
 
-        print(f"  Parity vs HF ref:")
+        print("  Parity vs HF ref:")
         print(f"    encoder:  max_diff={enc_max:.6e}  mean_diff={enc_mean:.6e}")
         print(f"    decoder:  max_diff={dec_max:.6e}  mean_diff={dec_mean:.6e}")
         print(f"    logits:   max_diff={log_max:.6e}  mean_diff={log_mean:.6e}")

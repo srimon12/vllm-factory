@@ -44,7 +44,7 @@ def _fused_qk_norm_rope_kernel(
     b_idx = bsh_idx // (seq_len * num_heads)
     rem = bsh_idx % (seq_len * num_heads)
     s_idx = rem // num_heads
-    h_idx = rem % num_heads
+    _ = rem % num_heads  # h_idx not needed but keeps index logic readable
 
     x_base = X_ptr + bsh_idx * stride_x_bsh
     out_base = Out_ptr + bsh_idx * stride_x_bsh

@@ -72,7 +72,7 @@ def tile_to_batch(ref_block: dict, batch_size: int, device: torch.device):
 
 
 def run_forward(model, input_ids, attention_mask, dec_ids, dec_mask):
-    enc_out = model.get_encoder_outputs(input_ids, attention_mask=attention_mask)
+    model.get_encoder_outputs(input_ids, attention_mask=attention_mask)
     dec_out = model(
         input_ids=input_ids,
         attention_mask=attention_mask,

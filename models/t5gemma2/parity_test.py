@@ -21,7 +21,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import functools
 import json
 import os
 import sys
@@ -169,6 +168,8 @@ def phase_collect():
 
     from transformers import (
         AutoTokenizer,
+    )
+    from transformers import (
         T5Gemma2ForConditionalGeneration as HFModel,
     )
 
