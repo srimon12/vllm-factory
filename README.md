@@ -32,20 +32,20 @@ curl -s http://localhost:8000/pooling \
 
 ## Benchmarks — vLLM Factory vs vanilla PyTorch
 
-Measured on NVIDIA RTX A5000, 500 requests, 512–768 tokens, bfloat16, vLLM 0.19.0 V1 engine. Peak throughput factor at optimal concurrency (saturate mode). Full sweep data and charts in [`bench/`](bench/).
+Measured on NVIDIA RTX A5000, 500 requests, 512–768 tokens, bfloat16, vLLM 0.19.0 V1 engine. Full sweep data and charts in [`bench/`](bench/).
 
-| Model | Task | Params | Throughput Factor | vLLM req/s | Parity |
-|:------|:-----|-------:|:-----------------:|:----------:|:------:|
-| [DeBERTa GLiNER Linker](https://huggingface.co/knowledgator/gliner-linker-large-v1.0) | Entity linking | 304M | **12.6x** | 188 req/s | 1.000 |
-| [MT5 GLiNER](https://huggingface.co/knowledgator/gliner-x-large) | NER | 800M | **10.2x** | 156 req/s | 1.000 |
-| [DeBERTa GLiNER2](https://huggingface.co/fastino/gliner2-large-v1) | Schema extraction | 304M | **6.1x** | 263 req/s | 1.000 |
-| [ColLFM2](https://huggingface.co/VAGOsolutions/SauerkrautLM-ColLFM2-450M-v0.1) | Multimodal retrieval | 450M | **4.9x** | 18 req/s | 0.9996 |
-| [LFM2-ColBERT](https://huggingface.co/LiquidAI/LFM2-ColBERT-350M) | Retrieval | 350M | **4.6x** | 174 req/s | 1.000 |
-| [MMBert GLiNER](https://huggingface.co/VAGOsolutions/SauerkrautLM-GLiNER) | NER | 150M | **3.5x** | 180 req/s | 1.000 |
-| [ModernColBERT](https://huggingface.co/VAGOsolutions/SauerkrautLM-Multi-Reason-ModernColBERT) | Retrieval | 149M | **2.1x** | 100 req/s | 0.970 |
-| [ColBERT-Zero](https://huggingface.co/lightonai/ColBERT-Zero) | Retrieval | — | **1.7x** | 35 req/s | 0.970 |
+| Model | Task | Params | Peak vLLM req/s | vs Vanilla | Parity |
+|:------|:-----|-------:|:---------------:|:----------:|:------:|
+| [DeBERTa GLiNER2](https://huggingface.co/fastino/gliner2-large-v1) | Schema extraction | 304M | **263 req/s** | 6.1x | 1.000 |
+| [DeBERTa GLiNER Linker](https://huggingface.co/knowledgator/gliner-linker-large-v1.0) | Entity linking | 304M | **188 req/s** | 12.6x | 1.000 |
+| [MMBert GLiNER](https://huggingface.co/VAGOsolutions/SauerkrautLM-GLiNER) | NER | 150M | **180 req/s** | 3.5x | 1.000 |
+| [LFM2-ColBERT](https://huggingface.co/LiquidAI/LFM2-ColBERT-350M) | Retrieval | 350M | **174 req/s** | 4.6x | 1.000 |
+| [MT5 GLiNER](https://huggingface.co/knowledgator/gliner-x-large) | NER | 800M | **156 req/s** | 10.2x | 1.000 |
+| [ModernColBERT](https://huggingface.co/VAGOsolutions/SauerkrautLM-Multi-Reason-ModernColBERT) | Retrieval | 149M | **107 req/s** | 2.1x | 0.970 |
+| [ColBERT-Zero](https://huggingface.co/lightonai/ColBERT-Zero) | Retrieval | 149M | **107 req/s** | 1.7x | 0.970 |
+| [ColLFM2](https://huggingface.co/VAGOsolutions/SauerkrautLM-ColLFM2-450M-v0.1) | Multimodal retrieval | 450M | **18 req/s** | 4.9x | 0.9996 |
 
-> **Throughput factor** = vLLM Factory req/s ÷ vanilla PyTorch req/s (batch_size=1). **Parity** = cosine similarity (embeddings) or entity recall (NER) vs reference implementation. All 12/12 plugins pass parity validation.
+> **Peak vLLM req/s** = highest throughput at optimal concurrency. **vs Vanilla** = vLLM Factory req/s ÷ vanilla PyTorch req/s (batch_size=1) at peak factor. **Parity** = cosine similarity (embeddings) or entity recall (NER) vs reference. All 12/12 plugins pass parity. ModernColBERT and ColBERT-Zero share the same encoder and achieve identical vLLM throughput — the lower factor for ColBERT-Zero reflects a faster PyLate vanilla baseline, not slower vLLM performance.
 
 <details>
 <summary><b>Per-model benchmark charts</b> (click to expand)</summary>
