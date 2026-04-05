@@ -82,6 +82,8 @@ vllm-factory-serve /tmp/gliner2-vllm \
 
 When `--num-instances 1` (default), the command is equivalent to `vllm serve`. With N > 1, it launches N backend workers on consecutive ports and a lightweight reverse proxy on the user-facing port. GPU memory is automatically partitioned across instances.
 
+**[Full tutorial →](docs/multi_instance_serving.md)**
+
 ---
 
 ## Why vLLM Factory?
