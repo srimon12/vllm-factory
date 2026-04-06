@@ -30,4 +30,17 @@ debug_*.py
 
 # Bench: exclude results, server logs, and chart archive
 bench/results/
+bench/results_*/
 bench/charts/archive/
+
+# Internal benchmark results and old benchmark scripts
+benchmarks/
+
+# Internal docs (audits, integration guides, validation matrices)
+docs/AUDIT_*.md
+docs/GLINKER_*.md
+docs/io_processor_*.md
+
+# Internal scripts (reference generation, parity orchestrators, GLiNER helpers)
+scripts/
+tests/

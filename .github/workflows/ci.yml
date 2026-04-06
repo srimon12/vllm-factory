@@ -25,14 +25,14 @@ jobs:
           pip install "ruff>=0.4" "pytest>=7.0" "packaging>=24.0" "build"
 
       - name: Lint
-        run: ruff check forge/ plugins/ kernels/ poolers/ tests/ vllm_factory/ --select E,F,I,W --ignore E501
+        run: ruff check forge/ plugins/ kernels/ poolers/ vllm_factory/ --select E,F,I,W --ignore E501
 
       - name: Format check
-        run: ruff format --check forge/ plugins/ tests/ vllm_factory/
+        run: ruff format --check forge/ plugins/ vllm_factory/
 
       - name: Import and syntax smoke checks
         run: |
-          python -m compileall forge models poolers kernels plugins tests vllm_factory
+          python -m compileall forge models poolers kernels plugins vllm_factory
 
       - name: Plugin import smoke test
         run: |
@@ -67,4 +67,5 @@ jobs:
         run: python -m build --sdist --wheel
 
       - name: Run CPU-safe tests
-        run: pytest -q tests
+        run: |
+          if [ -d tests ]; then pytest -q tests; else echo "No tests/ directory — skipping"; fi
