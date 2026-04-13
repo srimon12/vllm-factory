@@ -63,9 +63,7 @@ class Dispatcher:
 
     async def start(self) -> None:
         """Start the dispatcher HTTP server."""
-        self._semaphores = [
-            asyncio.Semaphore(self._max_bs) for _ in range(self._num_backends)
-        ]
+        self._semaphores = [asyncio.Semaphore(self._max_bs) for _ in range(self._num_backends)]
         self._rr_counter = 0
 
         connector = TCPConnector(

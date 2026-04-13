@@ -47,9 +47,7 @@ def register_pooler(name: str, cls: type) -> None:
 
 def get_pooler_cls(name: str) -> type:
     if name not in _REGISTRY:
-        raise KeyError(
-            f"Unknown pooler '{name}'. Available: {list(_REGISTRY.keys())}"
-        )
+        raise KeyError(f"Unknown pooler '{name}'. Available: {list(_REGISTRY.keys())}")
     return _REGISTRY[name]
 
 

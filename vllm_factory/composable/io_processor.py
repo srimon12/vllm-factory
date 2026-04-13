@@ -109,9 +109,9 @@ class GenericPoolingIOProcessor(FactoryIOProcessor):
         if not isinstance(raw, torch.Tensor):
             raw = torch.as_tensor(raw)
 
-        return base64.b64encode(
-            raw.cpu().contiguous().to(torch.float32).numpy().tobytes()
-        ).decode("ascii")
+        return base64.b64encode(raw.cpu().contiguous().to(torch.float32).numpy().tobytes()).decode(
+            "ascii"
+        )
 
 
 def get_processor_cls() -> str:

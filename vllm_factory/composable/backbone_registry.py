@@ -49,9 +49,7 @@ def register_backbone(entry: BackboneEntry) -> None:
 
 def get_backbone(name: str) -> BackboneEntry:
     if name not in _REGISTRY:
-        raise KeyError(
-            f"Unknown backbone '{name}'. Available: {list(_REGISTRY.keys())}"
-        )
+        raise KeyError(f"Unknown backbone '{name}'. Available: {list(_REGISTRY.keys())}")
     return _REGISTRY[name]
 
 
@@ -105,9 +103,7 @@ def _create_t5gemma2(cls: type, vllm_config: Any, prefix: str) -> nn.Module:
 # ---------------------------------------------------------------------------
 
 
-def _hs_generic_forward(
-    model: nn.Module, input_ids, positions=None, **kw
-) -> torch.Tensor:
+def _hs_generic_forward(model: nn.Module, input_ids, positions=None, **kw) -> torch.Tensor:
     """For encoder-only models whose forward() returns hidden states directly."""
     if positions is not None and positions.dim() == 1:
         positions = positions.unsqueeze(0)
@@ -215,9 +211,7 @@ def _register_builtins() -> None:
             get_hidden_states=_hs_t5gemma2,
             create_instance=_create_t5gemma2,
             extra_model_types=(),
-            extra_architectures=(
-                "T5Gemma2ForConditionalGeneration",
-            ),
+            extra_architectures=("T5Gemma2ForConditionalGeneration",),
         ),
     ]
     for entry in _builtins:

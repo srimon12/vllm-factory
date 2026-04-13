@@ -193,8 +193,7 @@ def _run_multi(
     from forge.multi_instance import MultiInstanceServer
 
     logger.info(
-        f"[beta] Multi-instance mode: {num_instances} backends, "
-        f"max_bs={args.max_batch_size}"
+        f"[beta] Multi-instance mode: {num_instances} backends, max_bs={args.max_batch_size}"
     )
 
     multi = MultiInstanceServer(

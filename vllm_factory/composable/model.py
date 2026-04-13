@@ -31,9 +31,7 @@ from vllm_factory.pooling.vllm_adapter import VllmPoolerAdapter
 logger = logging.getLogger(__name__)
 
 
-def _build_resolution_maps() -> (
-    tuple[dict[str, str], dict[str, str]]
-):
+def _build_resolution_maps() -> tuple[dict[str, str], dict[str, str]]:
     """Build model_type->backbone and architecture->backbone maps from the registry."""
     type_map: dict[str, str] = {}
     arch_map: dict[str, str] = {}
@@ -142,9 +140,7 @@ class ComposablePoolingModel(nn.Module):
         # --- backbone ---
         backbone_entry = get_backbone(backbone_name)
         BackboneClass = load_backbone_class(backbone_entry)
-        self._backbone = backbone_entry.create_instance(
-            BackboneClass, vllm_config, prefix
-        )
+        self._backbone = backbone_entry.create_instance(BackboneClass, vllm_config, prefix)
         self._backbone_entry = backbone_entry
 
         # --- pooler ---
@@ -205,9 +201,7 @@ class ComposablePoolingModel(nn.Module):
             "or known embedding attribute."
         )
 
-    def load_weights(
-        self, weights: Iterable[tuple[str, torch.Tensor]]
-    ) -> set[str] | None:
+    def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str] | None:
         """Delegate weight loading to backbone, then load pooler weights if any."""
         backbone_weights = []
         pooler_weights: dict[str, torch.Tensor] = {}
@@ -215,7 +209,7 @@ class ComposablePoolingModel(nn.Module):
 
         for name, tensor in weights:
             if name.startswith(pooler_prefix):
-                pooler_weights[name[len(pooler_prefix):]] = tensor
+                pooler_weights[name[len(pooler_prefix) :]] = tensor
             else:
                 backbone_weights.append((name, tensor))
 
@@ -242,9 +236,7 @@ class ComposablePoolingModel(nn.Module):
 
         return result
 
-    def _load_weights_manual(
-        self, weights: list[tuple[str, torch.Tensor]]
-    ) -> set[str]:
+    def _load_weights_manual(self, weights: list[tuple[str, torch.Tensor]]) -> set[str]:
         """Fallback weight loader for backbones without load_weights()."""
         from vllm.model_executor.model_loader.weight_utils import default_weight_loader
 

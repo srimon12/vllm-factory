@@ -97,7 +97,9 @@ class MultiInstanceServer:
         self._extra_args = _strip_flag(extra_args or [], "--gpu-memory-utilization")
         self._model_kwargs = model_kwargs
 
-        gpu_util = gpu_memory_utilization if gpu_memory_utilization else _scale_gpu_memory(num_instances)
+        gpu_util = (
+            gpu_memory_utilization if gpu_memory_utilization else _scale_gpu_memory(num_instances)
+        )
         self._gpu_util = gpu_util
 
         self._servers: list[ModelServer] = []
@@ -141,8 +143,7 @@ class MultiInstanceServer:
             raise
 
         backend_urls = [
-            f"http://127.0.0.1:{self._port_start + i}"
-            for i in range(self._num_instances)
+            f"http://127.0.0.1:{self._port_start + i}" for i in range(self._num_instances)
         ]
         self._dispatcher = Dispatcher(
             backend_urls=backend_urls,
