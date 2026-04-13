@@ -84,6 +84,7 @@ class MultiInstanceServer:
         port_start: int = 9100,
         extra_args: Optional[List[str]] = None,
         gpu_memory_utilization: Optional[float] = None,
+        enable_request_affinity: bool = False,
         **model_kwargs,
     ):
         if num_instances < 2:
@@ -94,6 +95,7 @@ class MultiInstanceServer:
         self._max_bs = max(1, max_bs)
         self._port = port
         self._port_start = port_start
+        self._enable_request_affinity = enable_request_affinity
         self._extra_args = _strip_flag(extra_args or [], "--gpu-memory-utilization")
         self._model_kwargs = model_kwargs
 
@@ -128,6 +130,7 @@ class MultiInstanceServer:
         logger.info(
             f"Starting multi-instance server: {self._num_instances} backends, "
             f"gpu_util={self._gpu_util:.2f}/instance, max_bs={self._max_bs}, "
+            f"request_affinity={'on' if self._enable_request_affinity else 'off'}, "
             f"dispatcher :{self._port}, backends :{self._port_start}-"
             f"{self._port_start + self._num_instances - 1}"
         )
@@ -150,6 +153,7 @@ class MultiInstanceServer:
             max_bs=self._max_bs,
             host="0.0.0.0",
             port=self._port,
+            enable_request_affinity=self._enable_request_affinity,
         )
 
         self._loop = asyncio.new_event_loop()

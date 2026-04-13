@@ -3,25 +3,73 @@ Async HTTP reverse proxy for multi-instance vLLM serving (beta).
 
 Transparently forwards every incoming HTTP request to one of N vLLM
 backend workers, enforcing a per-backend concurrency cap via asyncio
-semaphores and selecting backends with round-robin.
+semaphores and selecting backends with round-robin. An optional
+request-affinity mode can keep similar JSON requests on the same backend
+to preserve backend-local caches.
 
-The dispatcher is entirely protocol-agnostic: it never inspects request
-bodies, does not import any plugin code, and works with any endpoint
-(``/pooling``, ``/v1/embeddings``, ``/health``, etc.).
+The dispatcher works with any endpoint (``/pooling``, ``/v1/embeddings``,
+``/health``, etc.) and does not import any plugin code. When request
+affinity is disabled it treats request bodies as opaque. When affinity is
+enabled it may inspect JSON payload shape to derive a stable routing key.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
-from typing import Sequence
+from collections import OrderedDict
+from typing import Any, Sequence
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 
 logger = logging.getLogger("vllm-factory.dispatcher")
 
 _DEFAULT_MAX_BS = 32
+_DEFAULT_AFFINITY_CACHE_SIZE = 2048
 _CLIENT_TIMEOUT = ClientTimeout(total=300, connect=10)
+_VOLATILE_JSON_FIELDS = frozenset({"input", "inputs", "prompt", "prompts", "text", "texts"})
+
+
+def _text_length_bucket(value: Any) -> Any:
+    if isinstance(value, str):
+        length = len(value)
+        if length <= 256:
+            return "__len_le_256__"
+        if length <= 1024:
+            return "__len_le_1024__"
+        if length <= 4096:
+            return "__len_le_4096__"
+        return "__len_gt_4096__"
+    if isinstance(value, list):
+        total_chars = sum(len(item) for item in value if isinstance(item, str))
+        item_count = len(value)
+        if total_chars <= 512:
+            bucket = "__list_chars_le_512__"
+        elif total_chars <= 2048:
+            bucket = "__list_chars_le_2048__"
+        elif total_chars <= 8192:
+            bucket = "__list_chars_le_8192__"
+        else:
+            bucket = "__list_chars_gt_8192__"
+        return {"bucket": bucket, "items": item_count}
+    return "__affinity_text__"
+
+
+def _normalize_affinity_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key in sorted(value):
+            item = value[key]
+            if key in _VOLATILE_JSON_FIELDS:
+                normalized[key] = _text_length_bucket(item)
+                continue
+            normalized[key] = _normalize_affinity_json(item)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_affinity_json(item) for item in value]
+    return value
 
 
 class Dispatcher:
@@ -46,6 +94,8 @@ class Dispatcher:
         max_bs: int = _DEFAULT_MAX_BS,
         host: str = "0.0.0.0",
         port: int = 8000,
+        enable_request_affinity: bool = False,
+        affinity_cache_size: int = _DEFAULT_AFFINITY_CACHE_SIZE,
     ):
         if not backend_urls:
             raise ValueError("At least one backend URL is required")
@@ -54,10 +104,13 @@ class Dispatcher:
         self._max_bs = max(1, max_bs)
         self._host = host
         self._port = port
+        self._enable_request_affinity = enable_request_affinity
+        self._affinity_cache_size = max(1, affinity_cache_size)
         self._num_backends = len(self._backend_urls)
 
         self._semaphores: list[asyncio.Semaphore] = []
         self._rr_counter = 0
+        self._affinity_map: OrderedDict[str, int] = OrderedDict()
         self._session: ClientSession | None = None
         self._runner: web.AppRunner | None = None
 
@@ -65,6 +118,7 @@ class Dispatcher:
         """Start the dispatcher HTTP server."""
         self._semaphores = [asyncio.Semaphore(self._max_bs) for _ in range(self._num_backends)]
         self._rr_counter = 0
+        self._affinity_map.clear()
 
         connector = TCPConnector(
             limit=self._max_bs * self._num_backends * 2,
@@ -83,7 +137,8 @@ class Dispatcher:
 
         logger.info(
             f"Dispatcher listening on {self._host}:{self._port} "
-            f"-> {self._num_backends} backends (max_bs={self._max_bs})"
+            f"-> {self._num_backends} backends (max_bs={self._max_bs}, "
+            f"request_affinity={'on' if self._enable_request_affinity else 'off'})"
         )
 
     async def stop(self) -> None:
@@ -95,35 +150,100 @@ class Dispatcher:
             await self._session.close()
             self._session = None
 
-    def _pick_backend(self) -> int:
+    def _has_capacity(self, idx: int) -> bool:
+        sem = self._semaphores[idx]
+        return sem._value > 0  # noqa: SLF001 — fast capacity check
+
+    def _remember_affinity(self, affinity_key: str, idx: int) -> None:
+        self._affinity_map[affinity_key] = idx
+        self._affinity_map.move_to_end(affinity_key)
+        while len(self._affinity_map) > self._affinity_cache_size:
+            self._affinity_map.popitem(last=False)
+
+    def _forget_affinity(self, affinity_key: str | None, idx: int) -> None:
+        if affinity_key is None:
+            return
+        pinned_idx = self._affinity_map.get(affinity_key)
+        if pinned_idx == idx:
+            self._affinity_map.pop(affinity_key, None)
+
+    @staticmethod
+    def _make_affinity_key(
+        method: str,
+        path: str,
+        query_string: str,
+        content_type: str | None,
+        body: bytes,
+    ) -> str | None:
+        if not body:
+            return f"{method}:{path}?{query_string}"
+
+        normalized_body: str
+        if content_type and "json" in content_type.lower():
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                normalized_body = hashlib.sha1(body).hexdigest()
+            else:
+                normalized_body = json.dumps(
+                    _normalize_affinity_json(payload),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=True,
+                )
+        else:
+            normalized_body = hashlib.sha1(body).hexdigest()
+
+        digest = hashlib.sha1(normalized_body.encode("utf-8")).hexdigest()
+        return f"{method}:{path}?{query_string}:{digest}"
+
+    def _pick_backend(self, affinity_key: str | None = None) -> int:
         """Select a backend index via round-robin, preferring one with capacity.
 
         Tries up to N backends starting from the round-robin cursor.
         Falls back to the cursor position if all are at capacity (the
         semaphore will queue the request).
         """
+        if affinity_key is not None:
+            pinned_idx = self._affinity_map.get(affinity_key)
+            if pinned_idx is not None and self._has_capacity(pinned_idx):
+                self._affinity_map.move_to_end(affinity_key)
+                return pinned_idx
+
         start = self._rr_counter % self._num_backends
         self._rr_counter += 1
 
         for offset in range(self._num_backends):
             idx = (start + offset) % self._num_backends
-            sem = self._semaphores[idx]
-            if sem._value > 0:  # noqa: SLF001 — fast capacity check
+            if self._has_capacity(idx):
+                if affinity_key is not None:
+                    self._remember_affinity(affinity_key, idx)
                 return idx
 
+        if affinity_key is not None:
+            self._remember_affinity(affinity_key, start)
         return start
 
     async def _handle_proxy(self, request: web.Request) -> web.Response:
         """Forward a request to a backend and relay the response."""
         assert self._session is not None
 
-        idx = self._pick_backend()
+        body = await request.read()
+        affinity_key = None
+        if self._enable_request_affinity:
+            affinity_key = self._make_affinity_key(
+                request.method,
+                request.path,
+                request.query_string,
+                request.headers.get("Content-Type"),
+                body,
+            )
+
+        idx = self._pick_backend(affinity_key=affinity_key)
         backend_url = self._backend_urls[idx]
         target = f"{backend_url}/{request.match_info['path']}"
         if request.query_string:
             target = f"{target}?{request.query_string}"
-
-        body = await request.read()
 
         async with self._semaphores[idx]:
             try:
@@ -144,6 +264,7 @@ class Dispatcher:
                         content_type=resp.content_type,
                     )
             except Exception as exc:
+                self._forget_affinity(affinity_key, idx)
                 logger.error(f"Backend {idx} ({backend_url}) error: {exc}")
                 return web.Response(
                     status=502,
