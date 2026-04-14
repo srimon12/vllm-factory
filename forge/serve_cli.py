@@ -112,6 +112,11 @@ def main() -> None:
         default="0",
         help="CUDA_VISIBLE_DEVICES for the backend(s) (default: '0')",
     )
+    parser.add_argument(
+        "--enable-request-affinity",
+        action="store_true",
+        help="Prefer backend-locality for repeated JSON request shapes in multi-instance mode",
+    )
 
     args, extra = parser.parse_known_args()
 
@@ -193,7 +198,8 @@ def _run_multi(
     from forge.multi_instance import MultiInstanceServer
 
     logger.info(
-        f"[beta] Multi-instance mode: {num_instances} backends, max_bs={args.max_batch_size}"
+        f"[beta] Multi-instance mode: {num_instances} backends, max_bs={args.max_batch_size}, "
+        f"request_affinity={'on' if args.enable_request_affinity else 'off'}"
     )
 
     multi = MultiInstanceServer(
@@ -204,6 +210,7 @@ def _run_multi(
         port_start=args.port_start,
         extra_args=extra_args,
         gpu_memory_utilization=args.gpu_memory_utilization,
+        enable_request_affinity=args.enable_request_affinity,
         **model_kwargs,
     )
     multi.start()

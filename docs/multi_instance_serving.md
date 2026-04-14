@@ -64,7 +64,7 @@ curl -s http://localhost:8000/pooling \
 1. **`--num-instances 1` (default)** — identical to `vllm serve`. No proxy, no overhead. This is a hard compatibility guarantee.
 2. **`--num-instances N` (N > 1)** — launches N vLLM backends on ports 9100..9100+N-1, each with `gpu_memory_utilization ≈ 0.92 / N`. A lightweight `aiohttp` dispatcher binds to the user-facing port (default 8000).
 3. **Per-backend concurrency cap** — each backend is guarded by an `asyncio.Semaphore(max_batch_size)`. When all backends are at capacity, new requests queue in FIFO order. The dispatcher never drops requests.
-4. **Backend selection** — round-robin with capacity preference. The dispatcher advances a counter and picks the next backend that has free semaphore slots. If all are full, it falls back to strict round-robin (the semaphore queues the request).
+4. **Backend selection** — round-robin with capacity preference by default. With `--enable-request-affinity`, JSON requests also get a stable request-shape key so repeated schema/labels-heavy calls can prefer the same backend-local cache when capacity is available. If the pinned backend is full, the dispatcher falls back to the normal round-robin-capacity path.
 5. **Health** — `GET /health` on the dispatcher returns 200 if at least one backend is healthy.
 
 ## CLI reference
@@ -86,6 +86,7 @@ vllm-factory-serve MODEL [OPTIONS]
 | `--io-processor-plugin` | — | vLLM IOProcessor plugin name |
 | `--max-model-len` | — | Override max sequence length |
 | `--cuda-devices` | "0" | CUDA_VISIBLE_DEVICES for backend(s) |
+| `--enable-request-affinity` | off | Prefer backend-locality for repeated JSON request shapes in multi-instance mode |
 
 Extra flags after `--` are forwarded to each `vllm serve` backend.
 
@@ -111,6 +112,7 @@ vllm-factory-prep --model fastino/gliner2-large-v1 \
 
 vllm-factory-serve /tmp/gliner2-vllm \
   --num-instances 2 \
+  --enable-request-affinity \
   --io-processor-plugin deberta_gliner2_io \
   --dtype bfloat16 --enforce-eager
 ```
