@@ -111,6 +111,13 @@ class Dispatcher:
         self._semaphores: list[asyncio.Semaphore] = []
         self._rr_counter = 0
         self._affinity_map: OrderedDict[str, int] = OrderedDict()
+        self._routing_stats = {
+            "requests": 0,
+            "backend_counts": [0 for _ in range(self._num_backends)],
+            "affinity_hits": 0,
+            "affinity_misses": 0,
+            "affinity_fallbacks": 0,
+        }
         self._session: ClientSession | None = None
         self._runner: web.AppRunner | None = None
 
@@ -119,6 +126,13 @@ class Dispatcher:
         self._semaphores = [asyncio.Semaphore(self._max_bs) for _ in range(self._num_backends)]
         self._rr_counter = 0
         self._affinity_map.clear()
+        self._routing_stats = {
+            "requests": 0,
+            "backend_counts": [0 for _ in range(self._num_backends)],
+            "affinity_hits": 0,
+            "affinity_misses": 0,
+            "affinity_fallbacks": 0,
+        }
 
         connector = TCPConnector(
             limit=self._max_bs * self._num_backends * 2,
@@ -168,12 +182,108 @@ class Dispatcher:
             self._affinity_map.pop(affinity_key, None)
 
     @staticmethod
+    def _parse_json_body(body: bytes, content_type: str | None) -> Any | None:
+        if not body or not content_type or "json" not in content_type.lower():
+            return None
+        try:
+            return json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+
+    @staticmethod
+    def _schema_request_size(schema: Any) -> int | None:
+        if not isinstance(schema, dict):
+            return None
+
+        size = 0
+
+        entities = schema.get("entities")
+        if isinstance(entities, list):
+            size += len(entities)
+        elif isinstance(entities, dict):
+            size += len(entities)
+
+        classifications = schema.get("classifications")
+        if isinstance(classifications, list):
+            size += len(classifications)
+
+        relations = schema.get("relations")
+        if isinstance(relations, list):
+            size += len(relations)
+        elif isinstance(relations, dict):
+            size += len(relations)
+
+        structures = schema.get("structures") or schema.get("json_structures")
+        if isinstance(structures, dict):
+            size += len(structures)
+            for structure in structures.values():
+                if not isinstance(structure, dict):
+                    continue
+                fields = structure.get("fields")
+                if isinstance(fields, list):
+                    size += len(fields)
+
+        return size
+
+    def _record_routing_observability(self, idx: int, affinity_state: str) -> None:
+        stats = self._routing_stats
+        stats["requests"] += 1
+        stats["backend_counts"][idx] += 1
+        if affinity_state == "hit":
+            stats["affinity_hits"] += 1
+        elif affinity_state == "miss":
+            stats["affinity_misses"] += 1
+        elif affinity_state == "fallback":
+            stats["affinity_fallbacks"] += 1
+
+    @staticmethod
+    def _build_route_headers(
+        idx: int,
+        affinity_state: str,
+        schema_size: int | None,
+    ) -> dict[str, str]:
+        headers = {
+            "X-VLLM-Factory-Backend-Index": str(idx),
+            "X-VLLM-Factory-Affinity-State": affinity_state,
+        }
+        if schema_size is not None:
+            headers["X-VLLM-Factory-Schema-Size"] = str(schema_size)
+        return headers
+
+    def _log_route_observability(
+        self,
+        *,
+        method: str,
+        path: str,
+        idx: int,
+        backend_url: str,
+        affinity_state: str,
+        schema_size: int | None,
+        status: int,
+    ) -> None:
+        if not logger.isEnabledFor(logging.INFO):
+            return
+
+        logger.info(
+            "Dispatcher routed request method=%s path=%s backend_idx=%d backend_url=%s "
+            "affinity_state=%s schema_size=%s status=%d",
+            method,
+            path,
+            idx,
+            backend_url,
+            affinity_state,
+            schema_size if schema_size is not None else "_unknown",
+            status,
+        )
+
+    @staticmethod
     def _make_affinity_key(
         method: str,
         path: str,
         query_string: str,
         content_type: str | None,
         body: bytes,
+        payload: Any | None = None,
     ) -> str | None:
         if not body:
             return f"{method}:{path}?{query_string}"
@@ -181,7 +291,8 @@ class Dispatcher:
         normalized_body: str
         if content_type and "json" in content_type.lower():
             try:
-                payload = json.loads(body.decode("utf-8"))
+                if payload is None:
+                    payload = json.loads(body.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError):
                 normalized_body = hashlib.sha1(body).hexdigest()
             else:
@@ -229,21 +340,46 @@ class Dispatcher:
         assert self._session is not None
 
         body = await request.read()
+        content_type = request.headers.get("Content-Type")
+        payload = self._parse_json_body(body, content_type)
         affinity_key = None
         if self._enable_request_affinity:
             affinity_key = self._make_affinity_key(
                 request.method,
                 request.path,
                 request.query_string,
-                request.headers.get("Content-Type"),
+                content_type,
                 body,
+                payload=payload,
             )
+
+        affinity_state = "disabled"
+        if self._enable_request_affinity:
+            pinned_idx = self._affinity_map.get(affinity_key) if affinity_key is not None else None
+            if pinned_idx is None:
+                affinity_state = "miss"
+            elif self._has_capacity(pinned_idx):
+                affinity_state = "hit"
+            else:
+                affinity_state = "fallback"
 
         idx = self._pick_backend(affinity_key=affinity_key)
         backend_url = self._backend_urls[idx]
         target = f"{backend_url}/{request.match_info['path']}"
         if request.query_string:
             target = f"{target}?{request.query_string}"
+
+        schema_size = None
+        if isinstance(payload, dict):
+            data = payload.get("data")
+            schema = None
+            if isinstance(data, dict) and "schema" in data:
+                schema = data.get("schema")
+            elif "schema" in payload:
+                schema = payload.get("schema")
+            schema_size = self._schema_request_size(schema)
+
+        self._record_routing_observability(idx, affinity_state)
 
         async with self._semaphores[idx]:
             try:
@@ -258,19 +394,45 @@ class Dispatcher:
                     data=body,
                 ) as resp:
                     resp_body = await resp.read()
-                    return web.Response(
+                    response = web.Response(
                         status=resp.status,
                         body=resp_body,
                         content_type=resp.content_type,
                     )
+                    response.headers.update(
+                        self._build_route_headers(idx, affinity_state, schema_size)
+                    )
+                    self._log_route_observability(
+                        method=request.method,
+                        path=request.path,
+                        idx=idx,
+                        backend_url=backend_url,
+                        affinity_state=affinity_state,
+                        schema_size=schema_size,
+                        status=resp.status,
+                    )
+                    return response
             except Exception as exc:
                 self._forget_affinity(affinity_key, idx)
                 logger.error(f"Backend {idx} ({backend_url}) error: {exc}")
-                return web.Response(
+                response = web.Response(
                     status=502,
                     text=f'{{"error": "backend unavailable: {exc}"}}',
                     content_type="application/json",
                 )
+                response.headers.update(
+                    self._build_route_headers(idx, affinity_state, schema_size)
+                )
+                self._log_route_observability(
+                    method=request.method,
+                    path=request.path,
+                    idx=idx,
+                    backend_url=backend_url,
+                    affinity_state=affinity_state,
+                    schema_size=schema_size,
+                    status=502,
+                )
+                return response
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         """Aggregate health: healthy if at least one backend is reachable."""
