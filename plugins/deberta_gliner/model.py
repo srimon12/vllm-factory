@@ -150,7 +150,9 @@ class GLiNERDebertaV2Model(nn.Module):
     ) -> torch.Tensor:
         """Run DeBERTa v2 encoder + projection, return hidden states for pooler."""
         with torch.no_grad():
-            hs = self._run_encoder(input_ids=input_ids, positions=positions, inputs_embeds=inputs_embeds)
+            hs = self._run_encoder(
+                input_ids=input_ids, positions=positions, inputs_embeds=inputs_embeds
+            )
 
         # Custom encoder returns tensor directly; flatten to 2D
         if hs.dim() == 3:
@@ -300,9 +302,13 @@ class GLiNERDebertaV2Model(nn.Module):
                 for key, tensor in scorer_state.items():
                     tensor = tensor.to(device=device, dtype=dtype)
                     if key.startswith("proj_token."):
-                        getattr(self.scorer_proj_token, key[len("proj_token.") :]).data.copy_(tensor)
+                        getattr(self.scorer_proj_token, key[len("proj_token.") :]).data.copy_(
+                            tensor
+                        )
                     elif key.startswith("proj_label."):
-                        getattr(self.scorer_proj_label, key[len("proj_label.") :]).data.copy_(tensor)
+                        getattr(self.scorer_proj_label, key[len("proj_label.") :]).data.copy_(
+                            tensor
+                        )
                     elif key.startswith("out_mlp."):
                         parts = key.split(".")
                         idx = int(parts[1])
