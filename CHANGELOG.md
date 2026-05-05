@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-05
+
+### Fixed
+- Preserve GLiNER shape-prefix metadata in `float32` so bf16 pooling outputs do not round odd word counts above 256 and break token-level post-processing.
+
 ## [0.2.0] - 2026-04-05
 
 ### Changed
