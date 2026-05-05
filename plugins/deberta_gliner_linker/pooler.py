@@ -22,6 +22,7 @@ import torch.nn as nn
 from gliner.modeling.utils import extract_spans_from_tokens
 
 from vllm_factory.pooling.protocol import PoolerContext, split_hidden_states
+from vllm_factory.pooling.shape_prefix import pack_shape_prefixed_tensor
 
 
 class GLiNERLinkerPooler(nn.Module):
@@ -122,16 +123,7 @@ class GLiNERLinkerPooler(nn.Module):
 
             W, C, S = scores.shape
             N = int(span_idx.shape[0])
-            shape_prefix = torch.tensor([W, C, S, N], device=dev, dtype=scores.dtype)
-            flat = torch.cat(
-                [
-                    shape_prefix,
-                    scores.flatten(),
-                    span_idx.reshape(-1).to(dtype=scores.dtype),
-                    span_mask.reshape(-1).to(dtype=scores.dtype),
-                    span_logits.flatten(),
-                ]
-            )
+            flat = pack_shape_prefixed_tensor([W, C, S, N], scores, span_idx, span_mask, span_logits)
             outputs.append(flat)
 
         return outputs

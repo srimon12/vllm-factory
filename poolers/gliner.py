@@ -18,6 +18,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from vllm_factory.pooling.protocol import PoolerContext, split_hidden_states
+from vllm_factory.pooling.shape_prefix import pack_shape_prefixed_tensor
 
 # ---------- Utility components ----------
 
@@ -287,10 +288,7 @@ class GLiNERSpanPooler(nn.Module):
             pe = self.prompt_proj(pe_raw)
             scores = torch.einsum("BLKD,BCD->BLKC", span_rep, pe).squeeze(0)
             L, K, C = scores.shape
-            shape_prefix = torch.tensor(
-                [L, K, C], device=scores.device, dtype=scores.dtype
-            )
-            flat = torch.cat([shape_prefix, scores.flatten()])
+            flat = pack_shape_prefixed_tensor([L, K, C], scores)
             outputs.append(flat)
 
         return outputs

@@ -12,6 +12,7 @@ import torch.nn as nn
 from gliner.modeling.utils import extract_prompt_features_and_word_embeddings
 
 from vllm_factory.pooling.protocol import PoolerContext, split_hidden_states
+from vllm_factory.pooling.shape_prefix import pack_shape_prefixed_tensor
 
 
 class GLiNERRerankPooler(nn.Module):
@@ -106,8 +107,7 @@ class GLiNERRerankPooler(nn.Module):
             scores = self._run_scorer(words, prompts)
             scores = scores.squeeze(0)
             W, C, S = scores.shape
-            shape_prefix = torch.tensor([W, C, S], device=dev, dtype=scores.dtype)
-            flat = torch.cat([shape_prefix, scores.flatten()])
+            flat = pack_shape_prefixed_tensor([W, C, S], scores)
             outputs.append(flat)
 
         return outputs
